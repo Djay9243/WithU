@@ -50,10 +50,10 @@ struct JournalView: View {
                                  title: "No stories yet",
                                  message: "Tap the camera to share a moment.")
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 10)], spacing: 10) {
+                LazyVGrid(columns: StoryGrid.columns, spacing: 10) {
                     ForEach(stories) { story in
                         NavigationLink(value: story.id) {
-                            StoryThumbnail(story: story, size: 104)
+                            StoryThumbnail(story: story, size: nil)
                         }
                         .buttonStyle(.plain)
                     }

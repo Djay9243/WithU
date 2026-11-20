@@ -3,7 +3,13 @@
 //  WithU
 //
 //  The safety state machine for a single trip: countdown, arrival detection,
-//  smart check-ins, the escalation chain and Face ID / PIN confirmation.
+//  smart check-ins, the circle alert and Face ID / PIN confirmation.
+//
+//  Alert rules:
+//  • A missed check-in waits the reply window (15 or 20 min, from Settings),
+//    with a gentle reminder 5 min before, then alerts the whole circle at once
+//    with the last detected location and battery.
+//  • "Alert" and "I Need Help" alert the whole circle straight away.
 //
 
 import CoreLocation
@@ -76,7 +82,6 @@ final class TripManager {
     private var settings = AppSettings()
     private var tickTask: Task<Void, Never>?
     private var checkInTask: Task<Void, Never>?
-    private var escalationTask: Task<Void, Never>?
     private var stopAnchor: CLLocation?
     private var stoppedSince: Date?
     private var speedStrikes = 0
@@ -209,6 +214,20 @@ final class TripManager {
         }
     }
 
+    /// The "I've Arrived" button. Face ID (or the passcode) first, so nobody
+    /// else holding the phone can switch the safety off by saying you arrived.
+    /// Automatic arrival detection calls `arrive()` directly.
+    @discardableResult
+    func confirmArrival() async -> Bool {
+        guard canArrive else { return false }
+        let confirmed = await auth.authenticateOwner(reason: "Confirm it's you to end sharing")
+        guard confirmed, canArrive else { return false }
+        arrive()
+        return true
+    }
+
+    private var canArrive: Bool { phase == .active || phase == .checkingIn(.timerExpired) }
+
     /// "I've arrived safely" or automatic arrival detection.
     func arrive() {
         guard phase == .active || phase == .checkingIn(.timerExpired) else { return }
@@ -255,7 +274,6 @@ final class TripManager {
     func finish() {
         tickTask?.cancel()
         checkInTask?.cancel()
-        escalationTask?.cancel()
         location.stopUpdates()
         plan = nil
         circleName = ""
@@ -382,26 +400,13 @@ final class TripManager {
         lastSnapshot = makeSnapshot()
         phase = .alerting
         liveActivity.update(endDate: endsAt, status: .alerting, remainingDistance: remainingDistance)
-        notifications.postAlertStarted(contactName: contacts.first?.name)
-        UINotificationFeedbackGenerator().notificationOccurred(.error)
+        notifications.postAlertStarted(circleName: circleName)
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
 
-        // Escalation chain: contact #1 first, then everyone if nobody responds.
+        // Everyone in the circle at once, with the last location and battery.
+        // Location keeps updating for them every minute while the alert runs.
         save()
-        notify(indices: [0])
-        escalationTask?.cancel()
-        escalationTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(TripRules.escalationDelay))
-            guard let self, !Task.isCancelled, self.isAlertActive, self.respondingContact == nil else { return }
-            self.escalateToEveryone()
-        }
-    }
-
-    private func escalateToEveryone() {
-        for index in alertStates.indices where alertStates[index].status == .delivered || alertStates[index].status == .notified {
-            alertStates[index].status = .noResponse
-        }
-        let remaining = alertStates.indices.filter { alertStates[$0].status == .notYetNotified }
-        notify(indices: remaining)
+        notify(indices: Array(alertStates.indices))
     }
 
     /// Swaps in the iCloud delivery layer.
@@ -430,11 +435,10 @@ final class TripManager {
         }
     }
 
-    /// A contact tapped "I'm on it" on their phone; stops further escalation.
+    /// A contact tapped "I'm on it" on their phone, so you know help is coming.
     func contactResponded(_ contactID: UUID) {
         guard isAlertActive, let index = alertStates.firstIndex(where: { $0.contact.id == contactID }) else { return }
         alertStates[index].status = .onIt
-        escalationTask?.cancel()
     }
 
     /// "I'm safe — cancel alert". Face ID first, PIN as fallback.
@@ -474,7 +478,6 @@ final class TripManager {
     }
 
     private func cancelAlert() {
-        escalationTask?.cancel()
         isAlertActive = false
         alertStartedAt = nil
         pinError = nil
@@ -533,6 +536,8 @@ final class TripManager {
               Date.now.timeIntervalSince(lastLocationShare) >= 60 else { return }
         lastLocationShare = .now
         let snapshot = makeSnapshot()
+        // During an alert, keep "last seen" on screen in step with what the circle gets.
+        if isAlertActive { lastSnapshot = snapshot }
         let ids = contacts.map(\.id)
         Task { await sync.send(CircleMessage(kind: .location(snapshot), contactIDs: ids)) }
     }
@@ -622,13 +627,19 @@ final class TripManager {
         Task { await sync.send(CircleMessage(kind: .location(snapshot), contactIDs: ids)) }
     }
 
+    /// The last place the phone was detected and the battery. Never pretends:
+    /// no fix means "location unknown" (not the destination), an unknown
+    /// battery stays unknown (not 100%), and the time is when the fix was taken.
     private func makeSnapshot() -> LocationSnapshot {
-        let coordinate = location.currentLocation?.coordinate ?? plan?.destination.coordinate
-            ?? CLLocationCoordinate2D(latitude: 0, longitude: 0)
         let battery = Double(UIDevice.current.batteryLevel)
-        return LocationSnapshot(latitude: coordinate.latitude,
-                                longitude: coordinate.longitude,
-                                batteryLevel: battery >= 0 ? battery : 1,
-                                timestamp: .now)
+        let batteryLevel: Double? = battery >= 0 ? battery : nil
+        guard let fix = location.currentLocation else {
+            return LocationSnapshot(latitude: 0, longitude: 0, batteryLevel: batteryLevel,
+                                    timestamp: .now, hasLocation: false)
+        }
+        return LocationSnapshot(latitude: fix.coordinate.latitude,
+                                longitude: fix.coordinate.longitude,
+                                batteryLevel: batteryLevel,
+                                timestamp: fix.timestamp)
     }
 }

@@ -13,7 +13,7 @@ WithU is an iPhone app for solo travellers in Italy. Plan a trip on the map, sha
 ### Map
 - Full-screen map of Italy with Liquid Glass controls.
 - **Where to?** search, limited to places in Italy.
-- Travel mode panel: Walk, Drive, Cycle or Transit.
+- Walk, Drive, Cycle or Transit is picked in the trip sheet, not on the map.
 - Recent places: a recent place and **Start** is two taps.
 - A short trip sheet shows the time, distance, circle and **Start**.
 - Settings is the gear button at the top right.
@@ -26,7 +26,8 @@ WithU is an iPhone app for solo travellers in Italy. Plan a trip on the map, sha
 - Siri and Shortcuts: "Start a trip with WithU".
 
 ### Moments
-- **Share a Moment** opens the camera, then you add a short note.
+- **Share a Moment** opens the iPhone camera (or your photo library), then you add a short note.
+- During a trip, the photo chip next to Share a Moment shows the moments you've taken.
 - The place is found automatically, and you can tap it to hide the location.
 - You choose who sees each moment: **Only Me** or one or more circles.
 - Location data is removed from photos before saving.
@@ -38,10 +39,11 @@ WithU is an iPhone app for solo travellers in Italy. Plan a trip on the map, sha
 
 ### Safety (in the background)
 - **Stop prompt**: after a long stop, WithU asks "Found something nice?" with Share a Moment, All Good or I Need Help.
-- **Check-ins** if you leave your route, move unexpectedly fast, run out of time or aren't home by a set time.
-- **Alerts** go to your first contact, then the whole circle, with your last location and battery.
+- **Check-ins** if you leave your route, move unexpectedly fast, run out of time or aren't home by a set time. They're friendly, and you have **15 or 20 minutes** to reply (Settings), with a gentle reminder 5 minutes before.
+- **No reply?** The whole circle is told at once, with the **last place your phone was seen**, when that was, and your **battery**. Your location keeps updating for them every minute.
+- **Get Help** and **I Need Help** tell the whole circle straight away.
 - **I'm On It**: a contact can reply so you know help is coming.
-- Only your **Face ID or Safety PIN** can cancel an alert or end a trip.
+- Only your **Face ID or Safety PIN** can cancel an alert, end a trip or say **I've Arrived**.
 
 ### Circles
 - Create a circle with a name and people in one form.

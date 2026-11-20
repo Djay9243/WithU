@@ -12,6 +12,8 @@ import SwiftUI
 struct TripRecapView: View {
     @Environment(AppModel.self) private var model
     var journey: Journey
+    /// Rendered once per change, not on every redraw (rendering is expensive).
+    @State private var shareImage: Image?
 
     private var stories: [Story] { model.stories.stories(forTrip: journey.id) }
 
@@ -29,10 +31,10 @@ struct TripRecapView: View {
                         .card(fill: Theme.surface)
                 } else {
                     SectionLabel(text: "Moments")
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 10)], spacing: 10) {
+                    LazyVGrid(columns: StoryGrid.columns, spacing: 10) {
                         ForEach(stories) { story in
                             NavigationLink(value: story.id) {
-                                StoryThumbnail(story: story, size: 104)
+                                StoryThumbnail(story: story, size: nil)
                             }
                             .buttonStyle(.plain)
                         }
@@ -42,6 +44,9 @@ struct TripRecapView: View {
             .padding(20)
         }
         .background(ScreenBackground())
+        .task(id: stories.map(\.id)) {
+            shareImage = makeShareImage()
+        }
         .navigationTitle("Trip Recap")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -91,8 +96,9 @@ struct TripRecapView: View {
     }
 
     /// The shareable card as an image.
-    private var shareImage: Image? {
-        let photos = stories.compactMap { $0.photoFiles.first }.prefix(4).compactMap { model.stories.image(named: $0) }
+    private func makeShareImage() -> Image? {
+        let photos = stories.compactMap { $0.photoFiles.first }.prefix(4)
+            .compactMap { model.stories.thumbnail(named: $0, maxPixelSize: 800) }
         let card = RecapCard(journey: journey, photos: Array(photos), momentCount: stories.count)
         let renderer = ImageRenderer(content: card)
         renderer.scale = 3
@@ -132,8 +138,8 @@ private struct StoryPin: View {
 
     var body: some View {
         Group {
-            if let file = story.photoFiles.first, let image = model.stories.image(named: file) {
-                Image(uiImage: image).resizable().scaledToFill()
+            if let file = story.photoFiles.first {
+                StoryPhoto(file: file, maxPixelSize: 150)
             } else {
                 Image(systemName: "text.bubble.fill")
                     .foregroundStyle(.white)
@@ -152,6 +158,8 @@ private struct StoryPin: View {
 /// same wherever it's posted.
 private struct RecapCard: View {
     var journey: Journey
+    /// Rendered once per change, not on every redraw (rendering is expensive).
+    @State private var shareImage: Image?
     var photos: [UIImage]
     var momentCount: Int
 
@@ -173,14 +181,23 @@ private struct RecapCard: View {
                 .font(.system(size: 30, weight: .bold))
                 .lineLimit(2)
             if !photos.isEmpty {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: min(photos.count, 2)), spacing: 8) {
-                    ForEach(Array(photos.enumerated()), id: \.offset) { _, photo in
-                        Image(uiImage: photo)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(height: photos.count == 1 ? 260 : 150)
-                            .frame(maxWidth: .infinity)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                // A plain Grid: lazy grids don't draw inside ImageRenderer,
+                // which left the shared card without its photos.
+                Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+                    ForEach(Array(stride(from: 0, to: photos.count, by: 2)), id: \.self) { start in
+                        GridRow {
+                            ForEach(start..<min(start + 2, photos.count), id: \.self) { index in
+                                Color.clear
+                                    .frame(height: photos.count == 1 ? 260 : 150)
+                                    .frame(maxWidth: .infinity)
+                                    .overlay {
+                                        Image(uiImage: photos[index])
+                                            .resizable()
+                                            .scaledToFill()
+                                    }
+                                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            }
+                        }
                     }
                 }
             }

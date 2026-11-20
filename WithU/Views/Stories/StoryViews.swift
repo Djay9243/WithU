@@ -8,52 +8,89 @@
 
 import SwiftUI
 
-/// Square story preview: the first photo, or the caption on a tinted card.
-struct StoryThumbnail: View {
+/// A story photo that fills whatever frame it's given and is cropped to it.
+/// Uses a small downsampled copy so grids and chips stay fast.
+struct StoryPhoto: View {
     @Environment(AppModel.self) private var model
-    var story: Story
-    var size: CGFloat = 120
+    var file: String
+    /// Longest side in pixels to decode; nil loads the full photo.
+    var maxPixelSize: CGFloat? = 600
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            if let file = story.photoFiles.first, let image = model.stories.image(named: file) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: size, height: size * 1.25)
-                    .clipped()
-                LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .center, endPoint: .bottom)
-            } else {
-                Theme.lavenderDeep
-                Text(story.caption)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Theme.ink)
-                    .lineLimit(5)
-                    .padding(10)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // Color.clear takes the proposed frame; the photo fills it and is
+        // clipped, so a portrait or landscape photo can never spill out.
+        Color.clear
+            .overlay {
+                if let image = loadImage() {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Theme.lavenderDeep
+                        .overlay {
+                            Image(systemName: "photo")
+                                .foregroundStyle(Theme.inkSecondary)
+                        }
+                }
             }
-            if let place = story.displayPlace, !story.photoFiles.isEmpty {
-                Text(place)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .padding(8)
-            }
+            .clipped()
+    }
+
+    private func loadImage() -> UIImage? {
+        if let maxPixelSize {
+            return model.stories.thumbnail(named: file, maxPixelSize: maxPixelSize)
         }
-        .frame(width: size, height: size * 1.25)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(alignment: .topTrailing) {
-            if story.audience.isPrivate {
-                Image(systemName: "lock.fill")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.white)
-                    .padding(6)
-                    .background(.black.opacity(0.35), in: Circle())
-                    .padding(6)
+        return model.stories.image(named: file)
+    }
+}
+
+/// Story preview card: the first photo, or the caption on a tinted card.
+/// Pass a `size` for a fixed width, or nil to fill the width (e.g. in grids).
+struct StoryThumbnail: View {
+    var story: Story
+    var size: CGFloat? = 120
+
+    var body: some View {
+        Color.clear
+            .frame(width: size, height: size.map { $0 * 1.25 })
+            .aspectRatio(0.8, contentMode: .fit)
+            .overlay(alignment: .bottomLeading) {
+                ZStack(alignment: .bottomLeading) {
+                    if let file = story.photoFiles.first {
+                        StoryPhoto(file: file)
+                        LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .center, endPoint: .bottom)
+                    } else {
+                        Theme.lavenderDeep
+                        Text(story.caption)
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(Theme.ink)
+                            .lineLimit(5)
+                            .padding(10)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    }
+                    if let place = story.displayPlace, !story.photoFiles.isEmpty {
+                        Text(place)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .padding(8)
+                    }
+                }
             }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityText)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(alignment: .topTrailing) {
+                if story.audience.isPrivate {
+                    Image(systemName: "lock.fill")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(6)
+                        .background(.black.opacity(0.35), in: Circle())
+                        .padding(6)
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(accessibilityText)
     }
 
     private var accessibilityText: String {
@@ -62,6 +99,56 @@ struct StoryThumbnail: View {
         if story.audience.isPrivate { parts.append("Only you") }
         return parts.joined(separator: ", ")
     }
+}
+
+/// The photos from the running trip, opened from the trip screen.
+struct TripMomentsSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    var tripID: UUID
+    var onAdd: () -> Void
+
+    private var moments: [Story] { model.stories.stories(forTrip: tripID) }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                if moments.isEmpty {
+                    EmptyJournalCard(systemImage: "camera.fill",
+                                     title: "No moments yet",
+                                     message: "Photos you share on this trip show up here.")
+                        .padding(20)
+                } else {
+                    LazyVGrid(columns: StoryGrid.columns, spacing: 10) {
+                        ForEach(moments) { story in
+                            NavigationLink(value: story.id) {
+                                StoryThumbnail(story: story, size: nil)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(20)
+                }
+            }
+            .background(ScreenBackground())
+            .navigationTitle("This Trip")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Share a Moment", systemImage: "camera.fill", action: onAdd)
+                }
+            }
+            .storyDestinations()
+        }
+    }
+}
+
+/// One grid layout for story thumbnails everywhere: three equal columns.
+enum StoryGrid {
+    static let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 3)
 }
 
 /// A full story with its photos, place and audience.
@@ -82,13 +169,7 @@ struct StoryDetailView: View {
                     if !story.photoFiles.isEmpty {
                         TabView {
                             ForEach(story.photoFiles, id: \.self) { file in
-                                if let image = model.stories.image(named: file) {
-                                    Image(uiImage: image)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(maxWidth: .infinity)
-                                        .clipped()
-                                }
+                                StoryPhoto(file: file, maxPixelSize: nil)
                             }
                         }
                         .tabViewStyle(.page(indexDisplayMode: story.photoFiles.count > 1 ? .always : .never))

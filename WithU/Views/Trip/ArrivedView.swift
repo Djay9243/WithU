@@ -8,6 +8,7 @@ import SwiftUI
 struct ArrivedView: View {
     @Environment(AppModel.self) private var model
     @State private var showingRecap = false
+    @State private var openedStory: Story?
 
     private var trip: TripManager { model.trip }
     private var journey: Journey? { model.stories.journeys.first { $0.id == trip.tripID } }
@@ -55,7 +56,12 @@ struct ArrivedView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(moments) { story in
-                                StoryThumbnail(story: story, size: 72)
+                                Button {
+                                    openedStory = story
+                                } label: {
+                                    StoryThumbnail(story: story, size: 72)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                         .padding(.horizontal, 36)
@@ -89,10 +95,27 @@ struct ArrivedView: View {
                 NavigationStack {
                     TripRecapView(journey: journey)
                         .storyDestinations()
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Close", systemImage: "xmark") { showingRecap = false }
+                            }
+                        }
                 }
                 .environment(model)
                 .preferredColorScheme(model.settings.appearance.colorScheme)
             }
+        }
+        .sheet(item: $openedStory) { story in
+            NavigationStack {
+                StoryDetailView(storyID: story.id)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Close", systemImage: "xmark") { openedStory = nil }
+                        }
+                    }
+            }
+            .environment(model)
+            .preferredColorScheme(model.settings.appearance.colorScheme)
         }
     }
 

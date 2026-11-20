@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import ImageIO
 import Observation
 import UIKit
 
@@ -24,6 +25,7 @@ final class StoryStore {
     }
 
     @ObservationIgnored private let cache = NSCache<NSString, UIImage>()
+    @ObservationIgnored private let thumbnails = NSCache<NSString, UIImage>()
 
     init() {
         stories = Persistence.load([Story].self, for: .stories) ?? []
@@ -108,6 +110,24 @@ final class StoryStore {
         return image
     }
 
+    /// A small copy for grids, chips and map pins. Decoding a 1600 px JPEG for
+    /// every thumbnail made the Journal slow; ImageIO decodes straight to size.
+    func thumbnail(named file: String, maxPixelSize: CGFloat) -> UIImage? {
+        let key = "\(file)@\(Int(maxPixelSize))" as NSString
+        if let cached = thumbnails.object(forKey: key) { return cached }
+        let url = Self.folder.appendingPathComponent(file)
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        let image = UIImage(cgImage: cgImage)
+        thumbnails.setObject(image, forKey: key)
+        return image
+    }
+
     private static let folder: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let url = base.appendingPathComponent("Stories", isDirectory: true)
@@ -132,6 +152,7 @@ final class StoryStore {
 
     private func deletePhoto(_ file: String) {
         cache.removeObject(forKey: file as NSString)
+        thumbnails.removeAllObjects()
         try? FileManager.default.removeItem(at: Self.folder.appendingPathComponent(file))
     }
 }
@@ -150,10 +171,12 @@ nonisolated struct StoryPlace: Hashable, Identifiable, Sendable {
 
 extension UIImage {
     /// Draws the image at most `maxDimension` points on its longest side.
+    /// Always redraws a rotated photo, so it's saved upright with no
+    /// orientation flag (camera photos are stored sideways plus a flag).
     func scaledToFit(maxDimension: CGFloat) -> UIImage {
         let longest = max(size.width, size.height)
-        guard longest > maxDimension else { return self }
-        let factor = maxDimension / longest
+        guard longest > maxDimension || imageOrientation != .up else { return self }
+        let factor = min(maxDimension / longest, 1)
         let target = CGSize(width: size.width * factor, height: size.height * factor)
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1

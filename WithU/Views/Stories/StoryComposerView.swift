@@ -7,6 +7,7 @@
 //
 
 import CoreLocation
+import PhotosUI
 import SwiftUI
 
 struct StoryComposerView: View {
@@ -22,6 +23,7 @@ struct StoryComposerView: View {
     @State private var audience: StoryAudience = .onlyMe
     @State private var showingCamera = false
     @State private var didOpen = false
+    @State private var libraryItem: PhotosPickerItem?
 
     var body: some View {
         NavigationStack {
@@ -61,6 +63,18 @@ struct StoryComposerView: View {
         }
         .fullScreenCover(isPresented: $showingCamera) {
             CameraPicker { image in photo = image }
+                .ignoresSafeArea()
+        }
+        .photosPicker(isPresented: $showingLibrary, selection: $libraryItem, matching: .images)
+        .onChange(of: libraryItem) { _, item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    photo = image
+                }
+                libraryItem = nil
+            }
         }
     }
 
@@ -70,46 +84,76 @@ struct StoryComposerView: View {
 
     // MARK: Photo
 
+    @ViewBuilder
     private var photoArea: some View {
-        Button {
-            showingCamera = true
-        } label: {
-            ZStack {
-                if let photo {
+        if let photo {
+            // Shows the photo you just took, cropped to the card, never stretched.
+            Color.clear
+                .frame(maxWidth: .infinity)
+                .frame(height: 380)
+                .overlay {
                     Image(uiImage: photo)
                         .resizable()
                         .scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 380)
-                        .clipped()
-                        .overlay(alignment: .bottomTrailing) {
-                            Label("Retake", systemImage: "camera.rotate")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 9)
-                                .glassEffect(.regular, in: .capsule)
-                                .padding(12)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                .overlay(alignment: .bottomTrailing) {
+                    Menu {
+                        if CameraPicker.isAvailable {
+                            Button("Take Another Photo", systemImage: "camera") { showingCamera = true }
                         }
-                } else {
-                    VStack(spacing: 10) {
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 36, weight: .semibold))
-                            .foregroundStyle(Theme.primary)
-                        Text("Take a Photo")
-                            .font(.headline)
-                            .foregroundStyle(Theme.ink)
+                        Button("Choose from Library", systemImage: "photo.on.rectangle") { pickFromLibrary() }
+                        Button("Remove Photo", systemImage: "trash", role: .destructive) { self.photo = nil }
+                    } label: {
+                        Label("Change", systemImage: "camera.rotate")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 9)
+                            .glassEffect(.regular, in: .capsule)
                     }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 220)
-                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 28))
+                    .padding(12)
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Your photo")
+        } else {
+            VStack(spacing: 14) {
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 36, weight: .semibold))
+                    .foregroundStyle(Theme.primary)
+                    .accessibilityHidden(true)
+                HStack(spacing: 10) {
+                    if CameraPicker.isAvailable {
+                        Button {
+                            showingCamera = true
+                        } label: {
+                            Label("Take Photo", systemImage: "camera")
+                                .font(.subheadline.weight(.semibold))
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.glassProminent)
+                        .tint(Theme.primary)
+                    }
+                    PhotosPicker(selection: $libraryItem, matching: .images) {
+                        Label("Library", systemImage: "photo.on.rectangle")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.glass)
+                    .tint(Theme.ink)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .frame(maxWidth: .infinity)
+            .frame(height: 220)
+            .glassEffect(.regular, in: .rect(cornerRadius: 28))
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(photo == nil ? "Take a Photo" : "Retake Photo")
     }
+
+    @State private var showingLibrary = false
+
+    private func pickFromLibrary() { showingLibrary = true }
 
     // MARK: Place
 

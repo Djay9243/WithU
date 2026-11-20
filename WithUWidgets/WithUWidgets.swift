@@ -190,8 +190,8 @@ enum LiveActivityPalette {
     static func headline(for status: TripActivityAttributes.Status) -> String {
         switch status {
         case .onTheWay: "Sharing with your circle"
-        case .checkIn: "Are You OK? Tap to reply."
-        case .alerting: "Alerting your circle"
+        case .checkIn: "Everything okay? Tap to reply."
+        case .alerting: "Your circle is checking on you"
         case .arrived: "Arrived. Sharing stopped."
         }
     }

@@ -22,7 +22,6 @@ struct MapScreen: View {
 
     // Presentation
     @State private var showingSearch = false
-    @State private var showingModes = false
     @State private var showingSettings = false
     /// Picked in search; applied once the search sheet has closed.
     @State private var pendingDestination: Destination?
@@ -142,12 +141,11 @@ struct MapScreen: View {
     private var bottomBar: some View {
         GlassEffectContainer(spacing: 14) {
             VStack(alignment: .trailing, spacing: 12) {
-                if !model.recentDestinations.isEmpty, !showingModes {
+                if !model.recentDestinations.isEmpty {
                     recents
                 }
                 HStack(alignment: .bottom, spacing: 12) {
                     Button {
-                        showingModes = false
                         showingSearch = true
                     } label: {
                         HStack(spacing: 10) {
@@ -166,8 +164,6 @@ struct MapScreen: View {
                     .glassEffect(.regular.interactive(), in: .capsule)
                     .glassEffectID("search", in: glass)
                     .accessibilityLabel("Where to?")
-
-                    modePicker
                 }
             }
         }
@@ -198,47 +194,6 @@ struct MapScreen: View {
         .transition(.opacity)
     }
 
-    /// The mode button opens a small glass panel with the four ways to travel.
-    private var modePicker: some View {
-        VStack(spacing: 10) {
-            if showingModes {
-                ForEach(TravelMode.allCases.filter { $0 != mode }) { option in
-                    Button {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                            model.settings.lastTravelMode = option
-                            showingModes = false
-                        }
-                    } label: {
-                        Image(systemName: option.symbol)
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(Theme.onTint)
-                            .frame(width: 58, height: 58)
-                    }
-                    .buttonStyle(.plain)
-                    .glassEffect(.regular.tint(option.tint).interactive(), in: .circle)
-                    .glassEffectID(option, in: glass)
-                    .accessibilityLabel(option.title)
-                }
-            }
-            Button {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                    showingModes.toggle()
-                }
-            } label: {
-                Image(systemName: showingModes ? "xmark" : mode.symbol)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Theme.onTint)
-                    .contentTransition(.symbolEffect(.replace))
-                    .frame(width: 58, height: 58)
-            }
-            .buttonStyle(.plain)
-            .glassEffect(.regular.tint(mode.tint).interactive(), in: .circle)
-            .glassEffectID(mode, in: glass)
-            .sensoryFeedback(.selection, trigger: mode)
-            .accessibilityLabel(showingModes ? "Close" : "Travel mode: \(mode.title)")
-        }
-    }
-
     // MARK: Logic
 
     private var tripSheetPresented: Binding<Bool> {
@@ -257,7 +212,6 @@ struct MapScreen: View {
 
     private func choose(_ place: Destination) {
         model.rememberDestination(place)
-        showingModes = false
         route = nil
         errorMessage = nil
         destination = place

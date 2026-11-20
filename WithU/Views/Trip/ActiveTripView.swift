@@ -14,6 +14,8 @@ struct ActiveTripView: View {
     @State private var camera: MapCameraPosition = .automatic
     @State private var confirmingEnd = false
     @State private var composing = false
+    @State private var showingMoments = false
+    @State private var confirmingArrival = false
 
     private var trip: TripManager { model.trip }
     private var mode: TravelMode { trip.plan?.mode ?? .walk }
@@ -37,9 +39,18 @@ struct ActiveTripView: View {
                 .environment(model)
                 .preferredColorScheme(model.settings.appearance.colorScheme)
         }
+        .sheet(isPresented: $showingMoments) {
+            TripMomentsSheet(tripID: trip.tripID) {
+                showingMoments = false
+                composing = true
+            }
+            .environment(model)
+            .preferredColorScheme(model.settings.appearance.colorScheme)
+        }
     }
 
-    private var momentCount: Int { model.stories.stories(forTrip: trip.tripID).count }
+    private var moments: [Story] { model.stories.stories(forTrip: trip.tripID) }
+    private var momentCount: Int { moments.count }
 
     // MARK: Map
 
@@ -65,13 +76,13 @@ struct ActiveTripView: View {
             }
             .overlay(alignment: .top) {
                 VStack(spacing: 10) {
-                    HStack {
+                    HStack(spacing: 10) {
                         Button {
                             composing = true
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "camera.fill")
-                                Text(momentCount == 0 ? "Share a Moment" : "\(momentCount) \(momentCount == 1 ? "Moment" : "Moments")")
+                                Text("Share a Moment")
                             }
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
@@ -82,6 +93,29 @@ struct ActiveTripView: View {
                         }
                         .buttonStyle(PressableStyle())
                         .accessibilityLabel("Share a Moment")
+
+                        // The photos taken on this trip: the newest one and the count.
+                        if let latest = moments.first {
+                            Button {
+                                showingMoments = true
+                            } label: {
+                                HStack(spacing: 6) {
+                                    StoryThumbnail(story: latest, size: 30)
+                                        .frame(width: 30, height: 30)
+                                        .clipShape(Circle())
+                                    Text("\(momentCount)")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(Theme.ink)
+                                }
+                                .padding(.leading, 7)
+                                .padding(.trailing, 12)
+                                .frame(height: 44)
+                                .background(Theme.surface, in: Capsule())
+                                .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
+                            }
+                            .buttonStyle(PressableStyle())
+                            .accessibilityLabel("See \(momentCount) \(momentCount == 1 ? "moment" : "moments") from this trip")
+                        }
 
                         Spacer()
 
@@ -112,12 +146,19 @@ struct ActiveTripView: View {
     private var panel: some View {
         VStack(spacing: 14) {
             timerCard
+            // Face ID first, so nobody else can end the safety by saying you arrived.
             Button {
-                trip.arrive()
+                guard !confirmingArrival else { return }
+                confirmingArrival = true
+                Task {
+                    await trip.confirmArrival()
+                    confirmingArrival = false
+                }
             } label: {
-                Label("I've Arrived", systemImage: "checkmark.shield.fill")
+                Label("I've Arrived", systemImage: model.auth.biometryAvailable ? "faceid" : "checkmark.shield.fill")
             }
             .buttonStyle(.primary(Theme.safeGreen))
+            .disabled(confirmingArrival)
 
             HStack(spacing: 12) {
                 Button {
@@ -130,7 +171,7 @@ struct ActiveTripView: View {
                 Button {
                     trip.emergency()
                 } label: {
-                    Label("Alert", systemImage: "exclamationmark.triangle.fill")
+                    Label("Get Help", systemImage: "exclamationmark.triangle.fill")
                 }
                 .buttonStyle(.secondary(Theme.alertRed))
             }

@@ -39,6 +39,26 @@ struct OnboardingFlowView: View {
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
+        .overlay(alignment: .topLeading) {
+            // Back to the previous page, including from the permissions page,
+            // which had no way back before.
+            if page > 0 {
+                Button {
+                    page -= 1
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.title3.weight(.semibold))
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .tint(Theme.ink)
+                .padding(.leading, 16)
+                .padding(.top, 8)
+                .accessibilityLabel("Back")
+                .transition(.opacity)
+            }
+        }
         .animation(.easeInOut(duration: 0.3), value: page)
     }
 
