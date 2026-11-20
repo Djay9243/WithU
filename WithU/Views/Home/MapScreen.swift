@@ -34,9 +34,10 @@ struct MapScreen: View {
 
     /// Taller for public transport steps, a little taller for a route note.
     private var sheetHeight: CGFloat {
-        guard let route else { return 300 }
-        if route.legs.contains(where: { $0.kind == .ride }) { return 400 }
-        return route.note == nil ? 300 : 340
+        // Includes room for the top-left Close button.
+        guard let route else { return 310 }
+        if route.legs.contains(where: { $0.kind == .ride }) { return 410 }
+        return route.note == nil ? 310 : 350
     }
 
     private struct PlanKey: Equatable {
@@ -72,7 +73,8 @@ struct MapScreen: View {
                       route: route,
                       isPlanning: isPlanning,
                       errorMessage: errorMessage,
-                      onStart: requestStart)
+                      onStart: requestStart,
+                      onClose: clear)
                 .environment(model)
                 .presentationDetents([.height(sheetHeight)])
                 .presentationBackgroundInteraction(.enabled(upThrough: .height(sheetHeight)))
@@ -280,22 +282,37 @@ private struct TripSheet: View {
     var isPlanning: Bool
     var errorMessage: String?
     var onStart: () -> Void
+    /// Back to the map without starting, from the top-left button.
+    var onClose: () -> Void
 
     private var mode: TravelMode { model.settings.lastTravelMode }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(destination?.name ?? "")
-                    .font(.title3.bold())
-                    .foregroundStyle(Theme.ink)
-                    .lineLimit(1)
-                if let subtitle = destination?.subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(Theme.inkSecondary)
-                        .lineLimit(1)
+            HStack(alignment: .top, spacing: 12) {
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(width: 30, height: 30)
                 }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .tint(Theme.ink)
+                .accessibilityLabel("Close")
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(destination?.name ?? "")
+                        .font(.title3.bold())
+                        .foregroundStyle(Theme.ink)
+                        .lineLimit(1)
+                    if let subtitle = destination?.subtitle, !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(.subheadline)
+                            .foregroundStyle(Theme.inkSecondary)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
             }
 
             HStack(spacing: 10) {
