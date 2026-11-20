@@ -11,6 +11,7 @@ import SwiftUI
 struct SmartCheckInView: View {
     @Environment(AppModel.self) private var model
     var reason: CheckInReason
+    @State private var confirmingHelp = false
 
     private var trip: TripManager { model.trip }
 
@@ -47,15 +48,19 @@ struct SmartCheckInView: View {
                         Label("Add 10 Min", systemImage: "plus")
                     }
                     .buttonStyle(.secondary(Theme.ink))
-                    Button("I Need Help") {
-                        trip.needHelp()
+                    Button {
+                        confirmingHelp = true
+                    } label: {
+                        Label("I Need Help", systemImage: "hand.raised")
                     }
-                    .buttonStyle(.secondary(Theme.alertRed))
+                    .buttonStyle(.secondary(Theme.ink))
+                    .disabled(trip.isConfirmingHelp)
                 }
                 .padding(.horizontal, 36)
                 .padding(.bottom, 24)
             }
         }
+        .helpConfirmation(isPresented: $confirmingHelp)
     }
 
     private var countdownRing: some View {

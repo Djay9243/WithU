@@ -23,8 +23,8 @@ nonisolated struct RouteResult: Sendable {
     var note: String? = nil
 }
 
-/// One drawn part of a route. Each kind has its own line style, like Apple Maps:
-/// walking dotted, cycling and driving solid, the metro/train ride dashed.
+/// One drawn part of a route. Each kind has its own colour, like Apple Maps;
+/// all plain solid lines; the transit ride itself is not drawn (track unknown).
 nonisolated struct RouteLeg: Codable, Sendable {
     nonisolated enum Kind: String, Codable, Sendable {
         case walk, cycle, drive, ride

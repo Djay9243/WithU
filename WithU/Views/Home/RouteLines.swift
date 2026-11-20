@@ -17,6 +17,9 @@ struct RouteLines: MapContent {
         ForEach(Array(legs.enumerated()), id: \.offset) { _, leg in
             // The ride between stations isn't drawn: the track is unknown.
             if leg.kind != .ride, leg.points.count > 1 {
+                // One simple solid line with a white edge, like Apple Maps.
+                MapPolyline(coordinates: leg.coordinates)
+                    .stroke(.white, style: leg.kind.casingStyle)
                 MapPolyline(coordinates: leg.coordinates)
                     .stroke(leg.kind.color, style: leg.kind.strokeStyle)
             }
@@ -72,13 +75,15 @@ struct TransitSteps: View {
             VStack(alignment: .leading, spacing: compact ? 4 : 8) {
                 let walkIn = legs.first { $0.kind == .walk && $0.toName == on }
                 let walkOut = legs.last { $0.kind == .walk && $0.fromName == off }
+                // Names go in as Text values, so characters like * or _ in a
+                // place name are never read as formatting.
                 step(symbol: "figure.walk",
-                     text: "Walk\(minutes(walkIn)) to **\(on)**")
+                     text: Text("Walk\(minutes(walkIn)) to \(Text(on).bold())"))
                 step(symbol: TransitVehicle.symbol(ride.vehicle),
-                     text: "Take the \(TransitVehicle.name(ride.vehicle)), get off at **\(off)**")
+                     text: Text("Take the \(TransitVehicle.name(ride.vehicle)), get off at \(Text(off).bold())"))
                 if !compact {
                     step(symbol: "figure.walk",
-                         text: "Walk\(minutes(walkOut)) to \(destinationName)")
+                         text: Text("Walk\(minutes(walkOut)) to \(destinationName)"))
                 }
             }
             .font(compact ? .caption : .footnote)
@@ -87,13 +92,13 @@ struct TransitSteps: View {
         }
     }
 
-    private func step(symbol: String, text: String) -> some View {
+    private func step(symbol: String, text: Text) -> some View {
         HStack(spacing: 8) {
             Image(systemName: symbol)
                 .foregroundStyle(TravelMode.transit.routeColor)
                 .frame(width: 18)
                 .accessibilityHidden(true)
-            Text(.init(text))
+            text
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
@@ -115,18 +120,22 @@ extension RouteLeg.Kind {
         }
     }
 
-    var strokeStyle: StrokeStyle {
+    /// Every route is a plain solid line (no dots or dashes); only the
+    /// colour and thickness say how you travel.
+    var lineWidth: CGFloat {
         switch self {
-        case .walk:
-            // Round dots.
-            StrokeStyle(lineWidth: 7, lineCap: .round, lineJoin: .round, dash: [0.1, 12])
-        case .cycle:
-            StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round)
-        case .drive:
-            StrokeStyle(lineWidth: 8, lineCap: .round, lineJoin: .round)
-        case .ride:
-            // Not drawn (see RouteLines); kept for completeness.
-            StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round)
+        case .walk: 5
+        case .cycle, .ride: 6
+        case .drive: 7
         }
+    }
+
+    var strokeStyle: StrokeStyle {
+        StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
+    }
+
+    /// The white edge drawn underneath so the line stands out on the map.
+    var casingStyle: StrokeStyle {
+        StrokeStyle(lineWidth: lineWidth + 3, lineCap: .round, lineJoin: .round)
     }
 }

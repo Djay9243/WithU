@@ -14,7 +14,7 @@ WithU is an iPhone app for solo travellers in Italy. Plan a trip on the map, sha
 - Full-screen map of Italy with Liquid Glass controls.
 - **Where to?** search, limited to places in Italy.
 - Walk, Drive, Cycle or Transit is picked in the trip sheet, not on the map.
-- Each way of travelling draws its own route: walking dotted, cycling and driving solid, and transit as the walk to the nearest metro or train station, a dashed ride with station pins, and the walk at the end. **Lines in Maps** opens Apple Maps for the exact lines.
+- Each way of travelling draws its own route as a simple solid line, like Apple Maps. For transit, WithU shows the walk to the station, **Get on** and **Get off** pins and plain steps ("Walk 4 min to Vanvitelli, take the metro, get off at Toledo"). Apple Maps doesn't give apps the metro track, so the ride isn't drawn; **Lines in Maps** opens Apple Maps for the exact lines.
 - Recent places: a recent place and **Start** is two taps.
 - A short trip sheet shows the time, distance, circle and **Start**.
 - Settings is the gear button at the top right.

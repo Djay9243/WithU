@@ -158,8 +158,6 @@ private struct StoryPin: View {
 /// same wherever it's posted.
 private struct RecapCard: View {
     var journey: Journey
-    /// Rendered once per change, not on every redraw (rendering is expensive).
-    @State private var shareImage: Image?
     var photos: [UIImage]
     var momentCount: Int
 

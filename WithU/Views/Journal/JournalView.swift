@@ -39,6 +39,7 @@ struct JournalView: View {
         .sheet(isPresented: $composing) {
             StoryComposerView()
                 .environment(model)
+                .preferredColorScheme(model.settings.appearance.colorScheme)
         }
     }
 

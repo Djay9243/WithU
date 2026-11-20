@@ -101,6 +101,32 @@ struct StoryThumbnail: View {
     }
 }
 
+/// A story as a small round picture (chips and map pins): the photo, or a
+/// speech bubble when the story has no photo. Always exactly `size` square.
+struct StoryRoundPhoto: View {
+    var story: Story
+    var size: CGFloat
+    var borderWidth: CGFloat = 0
+
+    var body: some View {
+        Group {
+            if let file = story.photoFiles.first {
+                StoryPhoto(file: file, maxPixelSize: max(size * 3, 120))
+            } else {
+                Image(systemName: "text.bubble.fill")
+                    .font(.system(size: size * 0.42))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Theme.primary)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(.white, lineWidth: borderWidth))
+        .accessibilityHidden(true)
+    }
+}
+
 /// The photos from the running trip, opened from the trip screen.
 struct TripMomentsSheet: View {
     @Environment(AppModel.self) private var model
@@ -135,7 +161,7 @@ struct TripMomentsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
+                    Button("Close", systemImage: "xmark") { dismiss() }
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button("Share a Moment", systemImage: "camera.fill", action: onAdd)

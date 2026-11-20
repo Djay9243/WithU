@@ -23,6 +23,7 @@ struct StoryComposerView: View {
     @State private var audience: StoryAudience = .onlyMe
     @State private var showingCamera = false
     @State private var didOpen = false
+    @State private var didAutoOpenCamera = false
     @State private var libraryItem: PhotosPickerItem?
 
     var body: some View {
@@ -59,11 +60,25 @@ struct StoryComposerView: View {
             guard !didOpen else { return }
             didOpen = true
             audience = model.defaultStoryAudience
-            if CameraPicker.isAvailable { showingCamera = true }
+        }
+        .task {
+            // Open the camera once, after this sheet has finished opening
+            // (presenting during its own animation can be dropped). The task
+            // is cancelled with the sheet, so it can't fire after it closed.
+            guard !didAutoOpenCamera, CameraPicker.isAvailable else { return }
+            didAutoOpenCamera = true
+            try? await Task.sleep(for: .milliseconds(450))
+            guard !Task.isCancelled, photo == nil, !showingLibrary else { return }
+            showingCamera = true
         }
         .fullScreenCover(isPresented: $showingCamera) {
-            CameraPicker { image in photo = image }
-                .ignoresSafeArea()
+            CameraPicker { image in
+                photo = image
+                showingCamera = false
+            } onCancel: {
+                showingCamera = false
+            }
+            .ignoresSafeArea()
         }
         .photosPicker(isPresented: $showingLibrary, selection: $libraryItem, matching: .images)
         .onChange(of: libraryItem) { _, item in

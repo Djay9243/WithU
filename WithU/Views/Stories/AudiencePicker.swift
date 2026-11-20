@@ -131,8 +131,9 @@ private struct PeoplePicker: View {
             .navigationTitle("Choose People")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                // Choices apply as you tap, so there's nothing to save: just close.
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close", systemImage: "xmark") { dismiss() }
                 }
             }
         }

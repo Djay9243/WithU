@@ -16,6 +16,12 @@ struct ActiveTripView: View {
     @State private var composing = false
     @State private var showingMoments = false
     @State private var confirmingArrival = false
+    @State private var confirmingHelp = false
+    @State private var openedStory: Story?
+    /// Set by the moments sheet's "Share a Moment"; the composer opens once that sheet is gone.
+    @State private var composeAfterMoments = false
+    /// The story that was just saved, for the short "Moment saved" note.
+    @State private var savedStoryID: UUID?
 
     private var trip: TripManager { model.trip }
     private var mode: TravelMode { trip.plan?.mode ?? .walk }
@@ -34,23 +40,51 @@ struct ActiveTripView: View {
         } message: {
             Text("Location sharing stops and \(trip.circleName) is told the trip was cancelled.")
         }
+        .helpConfirmation(isPresented: $confirmingHelp)
         .sheet(isPresented: $composing) {
-            StoryComposerView()
-                .environment(model)
-                .preferredColorScheme(model.settings.appearance.colorScheme)
-        }
-        .sheet(isPresented: $showingMoments) {
-            TripMomentsSheet(tripID: trip.tripID) {
-                showingMoments = false
-                composing = true
+            StoryComposerView { story in
+                savedStoryID = story.id
             }
             .environment(model)
             .preferredColorScheme(model.settings.appearance.colorScheme)
+        }
+        .sheet(isPresented: $showingMoments, onDismiss: {
+            // Two sheets can't swap in one step, so the composer waits for this one to close.
+            if composeAfterMoments {
+                composeAfterMoments = false
+                composing = true
+            }
+        }) {
+            TripMomentsSheet(tripID: trip.tripID) {
+                composeAfterMoments = true
+                showingMoments = false
+            }
+            .environment(model)
+            .preferredColorScheme(model.settings.appearance.colorScheme)
+        }
+        .sheet(item: $openedStory) { story in
+            NavigationStack {
+                StoryDetailView(storyID: story.id)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Close", systemImage: "xmark") { openedStory = nil }
+                        }
+                    }
+            }
+            .environment(model)
+            .preferredColorScheme(model.settings.appearance.colorScheme)
+        }
+        .task(id: savedStoryID) {
+            guard savedStoryID != nil else { return }
+            try? await Task.sleep(for: .seconds(2.5))
+            if !Task.isCancelled { savedStoryID = nil }
         }
     }
 
     private var moments: [Story] { model.stories.stories(forTrip: trip.tripID) }
     private var momentCount: Int { moments.count }
+    /// Photos with a place get a pin on the map.
+    private var pinnedMoments: [Story] { moments.filter { $0.mapCoordinate != nil } }
 
     // MARK: Map
 
@@ -65,6 +99,23 @@ struct ActiveTripView: View {
                     if let plan = trip.plan {
                         Marker(plan.destination.name, systemImage: "flag.checkered", coordinate: plan.destination.coordinate)
                             .tint(mode.routeColor)
+                    }
+                    // A round photo where each moment was taken.
+                    ForEach(pinnedMoments) { story in
+                        if let coordinate = story.mapCoordinate {
+                            Annotation("", coordinate: coordinate, anchor: .center) {
+                                Button {
+                                    openedStory = story
+                                } label: {
+                                    StoryRoundPhoto(story: story, size: 40, borderWidth: 3)
+                                        .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
+                                        .frame(width: 44, height: 44)
+                                        .contentShape(Circle())
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(story.caption.isEmpty ? "Moment from this trip" : "Moment: \(story.caption)")
+                            }
+                        }
                     }
                 }
                 .mapStyle(.standard(pointsOfInterest: .including([.publicTransport, .cafe, .store, .restaurant, .pharmacy])))
@@ -97,9 +148,7 @@ struct ActiveTripView: View {
                                 showingMoments = true
                             } label: {
                                 HStack(spacing: 6) {
-                                    StoryThumbnail(story: latest, size: 30)
-                                        .frame(width: 30, height: 30)
-                                        .clipShape(Circle())
+                                    StoryRoundPhoto(story: latest, size: 30)
                                     Text("\(momentCount)")
                                         .font(.subheadline.weight(.semibold))
                                         .foregroundStyle(Theme.ink)
@@ -132,9 +181,21 @@ struct ActiveTripView: View {
                     if trip.waitingForSignal {
                         StatusPill(text: "No signal. We'll wait with you.", tint: Theme.amber)
                     }
+                    if savedStoryID != nil {
+                        Label("Moment saved", systemImage: "checkmark.circle.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Theme.ink)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Theme.surface, in: Capsule())
+                            .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
+                            .transition(.scale.combined(with: .opacity))
+                            .accessibilityAddTraits(.updatesFrequently)
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
+                .animation(.snappy, value: savedStoryID)
             }
     }
 
@@ -166,11 +227,12 @@ struct ActiveTripView: View {
                 .buttonStyle(.secondary(Theme.inkSecondary))
 
                 Button {
-                    trip.emergency()
+                    confirmingHelp = true
                 } label: {
-                    Label("Get Help", systemImage: "exclamationmark.triangle.fill")
+                    Label("Get Help", systemImage: "hand.raised")
                 }
-                .buttonStyle(.secondary(Theme.alertRed))
+                .buttonStyle(.secondary(Theme.ink))
+                .disabled(trip.isConfirmingHelp)
             }
         }
         .padding(.horizontal, 20)

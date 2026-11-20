@@ -15,8 +15,10 @@ import SwiftUI
 import UIKit
 
 struct CameraPicker: UIViewControllerRepresentable {
+    /// Called with the photo after "Use Photo". The presenter closes the camera.
     var onCapture: (UIImage) -> Void
-    @Environment(\.dismiss) private var dismiss
+    /// Called when the person cancels. The presenter closes the camera.
+    var onCancel: () -> Void
 
     /// False in the Simulator and on devices without a camera.
     static var isAvailable: Bool { UIImagePickerController.isSourceTypeAvailable(.camera) }
@@ -33,25 +35,38 @@ struct CameraPicker: UIViewControllerRepresentable {
         return picker
     }
 
-    func updateUIViewController(_ controller: UIImagePickerController, context: Context) {}
+    func updateUIViewController(_ controller: UIImagePickerController, context: Context) {
+        // Keep the callbacks current if the presenter was redrawn.
+        context.coordinator.onCapture = onCapture
+        context.coordinator.onCancel = onCancel
+    }
 
-    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onCapture: onCapture, onCancel: onCancel)
+    }
 
     final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        private let parent: CameraPicker
+        var onCapture: (UIImage) -> Void
+        var onCancel: () -> Void
 
-        init(_ parent: CameraPicker) { self.parent = parent }
+        init(onCapture: @escaping (UIImage) -> Void, onCancel: @escaping () -> Void) {
+            self.onCapture = onCapture
+            self.onCancel = onCancel
+        }
 
         func imagePickerController(_ picker: UIImagePickerController,
                                    didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            // The presenter closes the camera in both callbacks; nothing is read
+            // from the environment here, so it works outside a view update.
             if let image = info[.originalImage] as? UIImage {
-                parent.onCapture(image)
+                onCapture(image)
+            } else {
+                onCancel()
             }
-            parent.dismiss()
         }
 
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.dismiss()
+            onCancel()
         }
     }
 }
