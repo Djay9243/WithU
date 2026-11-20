@@ -50,6 +50,8 @@ final class TripManager {
     private(set) var startedAt: Date = .now
     private(set) var endsAt: Date = .now
     private(set) var routeCoordinates: [CLLocationCoordinate2D] = []
+    /// The route as drawn: walking, cycling, driving or walk + ride + walk.
+    private(set) var routeLegs: [RouteLeg] = []
     private(set) var remainingDistance: CLLocationDistance?
     private(set) var checkInDeadline: Date?
     private(set) var alertStates: [ContactAlertState] = []
@@ -121,6 +123,7 @@ final class TripManager {
         self.circle = circle
         self.settings = settings
         routeCoordinates = route.coordinates
+        routeLegs = route.legs
         isBusyRoute = route.isBusyRoute
         remainingDistance = plan.distance
 
@@ -167,7 +170,8 @@ final class TripManager {
                               extensionsAdded: extensionsAdded,
                               isAlerting: isAlertActive,
                               alertStartedAt: alertStartedAt,
-                              tripID: tripID)
+                              tripID: tripID,
+                              legs: routeLegs)
         Persistence.save(saved, for: .activeTrip)
     }
 
@@ -189,6 +193,7 @@ final class TripManager {
         startedAt = saved.startedAt
         endsAt = saved.endsAt
         routeCoordinates = saved.route.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+        routeLegs = saved.legs ?? (routeCoordinates.isEmpty ? [] : [RouteLeg(kind: saved.plan.mode.legKind, coordinates: routeCoordinates)])
         isBusyRoute = saved.isBusyRoute
         extensionsAdded = saved.extensionsAdded
         remainingDistance = saved.plan.distance
@@ -278,6 +283,7 @@ final class TripManager {
         plan = nil
         circleName = ""
         routeCoordinates = []
+        routeLegs = []
         remainingDistance = nil
         checkInDeadline = nil
         alertStates = []

@@ -61,10 +61,7 @@ struct ActiveTripView: View {
             .background {
                 Map(position: $camera) {
                     UserAnnotation()
-                    if !trip.routeCoordinates.isEmpty {
-                        MapPolyline(coordinates: trip.routeCoordinates)
-                            .stroke(mode.routeColor, style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
-                    }
+                    RouteLines(legs: trip.routeLegs)
                     if let plan = trip.plan {
                         Marker(plan.destination.name, systemImage: "flag.checkered", coordinate: plan.destination.coordinate)
                             .tint(mode.routeColor)

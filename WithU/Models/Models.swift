@@ -75,8 +75,6 @@ nonisolated enum TravelMode: String, Codable, CaseIterable, Identifiable, Sendab
         }
     }
 
-    /// Apple Maps only returns an arrival estimate for transit, not a drawable route.
-    var providesRoutePolyline: Bool { self != .transit }
 
     var liveUpdateConfiguration: CLLocationUpdate.LiveConfiguration {
         switch self {
@@ -196,6 +194,8 @@ nonisolated struct SavedTrip: Codable, Sendable {
     var alertStartedAt: Date?
     /// Links stories to the trip. Optional for trips saved by older builds.
     var tripID: UUID?
+    /// What's drawn on the map. Optional for trips saved by older builds.
+    var legs: [RouteLeg]?
 }
 
 // MARK: - Check-ins and alerts

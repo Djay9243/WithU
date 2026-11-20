@@ -32,6 +32,9 @@ struct MapScreen: View {
 
     private var mode: TravelMode { model.settings.lastTravelMode }
 
+    /// A little taller when there's a route note (e.g. which stations).
+    private var sheetHeight: CGFloat { route?.note == nil ? 300 : 340 }
+
     private struct PlanKey: Equatable {
         var destination: Destination?
         var mode: TravelMode
@@ -67,8 +70,8 @@ struct MapScreen: View {
                       errorMessage: errorMessage,
                       onStart: requestStart)
                 .environment(model)
-                .presentationDetents([.height(300)])
-                .presentationBackgroundInteraction(.enabled(upThrough: .height(300)))
+                .presentationDetents([.height(sheetHeight)])
+                .presentationBackgroundInteraction(.enabled(upThrough: .height(sheetHeight)))
                 .presentationDragIndicator(.visible)
                 .preferredColorScheme(model.settings.appearance.colorScheme)
         }
@@ -85,9 +88,8 @@ struct MapScreen: View {
         Map(position: $camera,
             bounds: MapCameraBounds(centerCoordinateBounds: Italy.region, maximumDistance: 3_000_000)) {
             UserAnnotation()
-            if let route, !route.coordinates.isEmpty {
-                MapPolyline(coordinates: route.coordinates)
-                    .stroke(mode.routeColor, style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
+            if let route {
+                RouteLines(legs: route.legs)
             }
             if let destination {
                 Marker(destination.name, systemImage: "flag.checkered", coordinate: destination.coordinate)
@@ -97,7 +99,7 @@ struct MapScreen: View {
         .mapStyle(.standard(elevation: .realistic, pointsOfInterest: .all))
         .mapControlVisibility(.hidden)
         // Keep the route clear of the trip sheet.
-        .safeAreaPadding(.bottom, destination == nil ? 0 : 300)
+        .safeAreaPadding(.bottom, destination == nil ? 0 : sheetHeight)
         .ignoresSafeArea()
     }
 
@@ -312,6 +314,25 @@ private struct TripSheet: View {
                 modeRow
             }
 
+            if let note = route?.note, !isPlanning {
+                HStack(spacing: 8) {
+                    Image(systemName: mode == .transit ? "tram.fill" : "info.circle")
+                        .foregroundStyle(mode.routeColor)
+                    Text(note)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                    Spacer(minLength: 4)
+                    if mode == .transit, let destination {
+                        // Exact lines and changes come from Apple Maps.
+                        Button("Lines in Maps") { openTransitInMaps(destination) }
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(Theme.primary)
+                    }
+                }
+                .font(.footnote)
+                .foregroundStyle(Theme.inkSecondary)
+            }
+
             CirclePickerRow()
 
             Button(action: onStart) {
@@ -326,6 +347,12 @@ private struct TripSheet: View {
     }
 
     private var canStart: Bool { route != nil && !isPlanning && !model.contacts.isEmpty }
+
+    private func openTransitInMaps(_ destination: Destination) {
+        let item = MKMapItem(location: destination.location, address: nil)
+        item.name = destination.name
+        item.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeTransit])
+    }
 
     private var startTitle: String {
         model.contacts.isEmpty ? "Add People in Circle" : "Start"
