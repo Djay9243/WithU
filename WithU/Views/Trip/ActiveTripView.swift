@@ -195,6 +195,14 @@ struct ActiveTripView: View {
                 Spacer()
             }
 
+            // Public transport: where to get on and where to get off.
+            if trip.routeLegs.contains(where: { $0.kind == .ride }) {
+                TransitSteps(legs: trip.routeLegs,
+                             destinationName: trip.plan?.destination.name ?? "your destination",
+                             compact: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             Text(timerInterval: trip.startedAt...max(trip.endsAt, trip.startedAt.addingTimeInterval(1)),
                  countsDown: true,
                  showsHours: trip.endsAt.timeIntervalSince(trip.startedAt) >= 3600)

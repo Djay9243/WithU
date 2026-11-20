@@ -31,15 +31,26 @@ nonisolated struct RouteLeg: Codable, Sendable {
     }
     var kind: Kind
     var points: [SavedTrip.Point]
-    /// For a ride: the station names at each end.
+    /// For a ride: the station where you get on and the one where you get off.
     var fromName: String?
     var toName: String?
+    /// How long this leg takes, when known.
+    var travelTime: TimeInterval?
+    /// For a ride: "metro", "train" or "bus".
+    var vehicle: String?
 
-    init(kind: Kind, coordinates: [CLLocationCoordinate2D], fromName: String? = nil, toName: String? = nil) {
+    init(kind: Kind,
+         coordinates: [CLLocationCoordinate2D],
+         fromName: String? = nil,
+         toName: String? = nil,
+         travelTime: TimeInterval? = nil,
+         vehicle: String? = nil) {
         self.kind = kind
         self.points = coordinates.map { .init(latitude: $0.latitude, longitude: $0.longitude) }
         self.fromName = fromName
         self.toName = toName
+        self.travelTime = travelTime
+        self.vehicle = vehicle
     }
 
     var coordinates: [CLLocationCoordinate2D] {
@@ -150,47 +161,48 @@ final class RoutingService {
 
     // MARK: - Transit
 
-    /// Apple Maps gives the transit arrival time but not the line's shape. So
-    /// we draw what we can know: the real walk to the nearest station, the
-    /// ride between stations (dashed, straight), and the walk at the end.
-    /// Exact lines and changes are one tap away in Apple Maps.
+    /// Apple Maps gives apps the transit arrival time, but not the line or the
+    /// track. So we don't draw a track we can't be sure of. Instead the trip is
+    /// three plain steps: walk to the station where you get on, ride, get off
+    /// at the station nearest the destination, walk the rest. Only the walks
+    /// are drawn. Exact lines and changes are one tap away in Apple Maps.
     private func transitRoute(from origin: CLLocationCoordinate2D,
                               to destination: Destination,
                               request: MKDirections.Request) async throws -> RouteResult {
         let eta = try await MKDirections(request: request).calculateETA()
-        let start = CLLocation(latitude: origin.latitude, longitude: origin.longitude)
 
-        async let nearStart = nearestStation(to: origin)
-        async let nearEnd = nearestStation(to: destination.coordinate)
-        let (fromStation, toStation) = await (nearStart, nearEnd)
-
-        var legs: [RouteLeg] = []
-        var note: String?
-        if let fromStation, let toStation,
-           fromStation.name != toStation.name,
-           fromStation.location.distance(from: toStation.location) > 300 {
-            async let firstWalk = walkingPath(from: origin, to: fromStation.location.coordinate)
-            async let lastWalk = walkingPath(from: toStation.location.coordinate, to: destination.coordinate)
-            let (walkIn, walkOut) = await (firstWalk, lastWalk)
-            legs = [
-                RouteLeg(kind: .walk, coordinates: walkIn),
-                RouteLeg(kind: .ride,
-                         coordinates: [fromStation.location.coordinate, toStation.location.coordinate],
-                         fromName: fromStation.name, toName: toStation.name),
-                RouteLeg(kind: .walk, coordinates: walkOut)
-            ]
-            note = "From \(fromStation.name) to \(toStation.name)"
-        } else {
-            // No stations found nearby: show the trip as one dashed ride.
-            legs = [RouteLeg(kind: .ride, coordinates: [start.coordinate, destination.coordinate])]
-            note = "Public transport"
+        guard let pair = await stationPair(from: origin, to: destination.coordinate) else {
+            // No stations within walking distance at one of the ends.
+            return RouteResult(expectedTravelTime: eta.expectedTravelTime,
+                               distance: eta.distance,
+                               coordinates: [],
+                               isBusyRoute: false,
+                               legs: [],
+                               note: "No station within walking distance. See Lines in Maps.")
         }
+
+        async let firstWalk = walk(from: origin, to: pair.on.location.coordinate)
+        async let lastWalk = walk(from: pair.off.location.coordinate, to: destination.coordinate)
+        let (walkIn, walkOut) = await (firstWalk, lastWalk)
+        let rideTime = max(eta.expectedTravelTime - walkIn.time - walkOut.time, 60)
+
+        let legs = [
+            RouteLeg(kind: .walk, coordinates: walkIn.path, toName: pair.on.name, travelTime: walkIn.time),
+            // Only the two stations are kept: the track between them isn't drawn.
+            RouteLeg(kind: .ride,
+                     coordinates: [pair.on.location.coordinate, pair.off.location.coordinate],
+                     fromName: pair.on.name,
+                     toName: pair.off.name,
+                     travelTime: rideTime,
+                     vehicle: pair.vehicle),
+            RouteLeg(kind: .walk, coordinates: walkOut.path, fromName: pair.off.name, toName: destination.name, travelTime: walkOut.time)
+        ]
         return RouteResult(expectedTravelTime: eta.expectedTravelTime,
                            distance: eta.distance,
                            coordinates: [],
                            isBusyRoute: false,
                            legs: legs,
-                           note: note)
+                           note: "Get on at \(pair.on.name), get off at \(pair.off.name)")
     }
 
     private struct Station {
@@ -198,50 +210,94 @@ final class RoutingService {
         var location: CLLocation
     }
 
-    /// The closest metro or train station within a 15-minute walk, else the
-    /// closest stop. Apple Maps' "public transport" category is mostly bus
-    /// stops, so metro and train stations are searched for by name first.
-    private func nearestStation(to coordinate: CLLocationCoordinate2D) async -> Station? {
-        let here = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-        let maxWalk: CLLocationDistance = 1200
+    private struct StationPair {
+        var on: Station
+        var off: Station
+        var vehicle: String
+    }
 
-        async let metro = stations(matching: "stazione metropolitana", near: coordinate)
-        async let rail = stations(matching: "train station", near: coordinate)
-        let railStations = await (metro + rail)
-            .filter { $0.location.distance(from: here) <= maxWalk }
-        if let nearest = railStations.min(by: { $0.location.distance(from: here) < $1.location.distance(from: here) }) {
-            return nearest
+    /// Farthest we ask someone to walk to or from a station (about 15 minutes).
+    private static let maxStationWalk: CLLocationDistance = 1200
+
+    /// The station to get on at and the one to get off at, both of the same
+    /// kind. Metro first, then train, then bus or tram stops. Within a kind,
+    /// the pair with the least walking in total.
+    private func stationPair(from origin: CLLocationCoordinate2D, to end: CLLocationCoordinate2D) async -> StationPair? {
+        async let metroOn = stations(matching: ["stazione metropolitana", "metro station"], near: origin)
+        async let metroOff = stations(matching: ["stazione metropolitana", "metro station"], near: end)
+        if let pair = bestPair(await metroOn, await metroOff, origin: origin, end: end, vehicle: "metro") {
+            return pair
         }
-
-        // No metro or train nearby: the closest bus or tram stop.
-        let request = MKLocalPointsOfInterestRequest(center: coordinate, radius: maxWalk)
-        request.pointOfInterestFilter = MKPointOfInterestFilter(including: [.publicTransport])
-        guard let items = try? await MKLocalSearch(request: request).start().mapItems else { return nil }
-        return items
-            .map { Station(name: $0.name ?? "Stop", location: $0.location) }
-            .min { $0.location.distance(from: here) < $1.location.distance(from: here) }
+        async let trainOn = stations(matching: ["stazione ferroviaria", "train station"], near: origin)
+        async let trainOff = stations(matching: ["stazione ferroviaria", "train station"], near: end)
+        if let pair = bestPair(await trainOn, await trainOff, origin: origin, end: end, vehicle: "train") {
+            return pair
+        }
+        async let stopsOn = transportStops(near: origin)
+        async let stopsOff = transportStops(near: end)
+        return bestPair(await stopsOn, await stopsOff, origin: origin, end: end, vehicle: "bus")
     }
 
-    private func stations(matching query: String, near coordinate: CLLocationCoordinate2D) async -> [Station] {
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = query
-        request.region = MKCoordinateRegion(center: coordinate, latitudinalMeters: 2400, longitudinalMeters: 2400)
-        request.resultTypes = .pointOfInterest
-        request.pointOfInterestFilter = MKPointOfInterestFilter(including: [.publicTransport])
-        guard let items = try? await MKLocalSearch(request: request).start().mapItems else { return [] }
-        return items.map { Station(name: $0.name ?? "Station", location: $0.location) }
+    private func bestPair(_ onCandidates: [Station], _ offCandidates: [Station],
+                          origin: CLLocationCoordinate2D, end: CLLocationCoordinate2D,
+                          vehicle: String) -> StationPair? {
+        let start = CLLocation(latitude: origin.latitude, longitude: origin.longitude)
+        let finish = CLLocation(latitude: end.latitude, longitude: end.longitude)
+        let ons = onCandidates.filter { $0.location.distance(from: start) <= Self.maxStationWalk }
+        let offs = offCandidates.filter { $0.location.distance(from: finish) <= Self.maxStationWalk }
+        var best: (pair: StationPair, walking: CLLocationDistance)?
+        for on in ons {
+            for off in offs where on.name != off.name && on.location.distance(from: off.location) > 300 {
+                let walking = on.location.distance(from: start) + off.location.distance(from: finish)
+                if best == nil || walking < best!.walking {
+                    best = (StationPair(on: on, off: off, vehicle: vehicle), walking)
+                }
+            }
+        }
+        return best?.pair
     }
 
-    /// The real walking path, or a straight line if Apple Maps can't find one.
-    private func walkingPath(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D) async -> [CLLocationCoordinate2D] {
+    /// Stations found by name (Apple Maps' "public transport" category is
+    /// mostly bus stops, so metro and train stations are searched by name).
+    private func stations(matching queries: [String], near coordinate: CLLocationCoordinate2D) async -> [Station] {
+        var found: [Station] = []
+        for query in queries {
+            let request = MKLocalSearch.Request()
+            request.naturalLanguageQuery = query
+            request.region = MKCoordinateRegion(center: coordinate,
+                                                latitudinalMeters: Self.maxStationWalk * 2,
+                                                longitudinalMeters: Self.maxStationWalk * 2)
+            request.resultTypes = .pointOfInterest
+            request.pointOfInterestFilter = MKPointOfInterestFilter(including: [.publicTransport])
+            let items = (try? await MKLocalSearch(request: request).start().mapItems) ?? []
+            for item in items {
+                let station = Station(name: item.name ?? "Station", location: item.location)
+                if !found.contains(where: { $0.name == station.name }) { found.append(station) }
+            }
+        }
+        return found
+    }
+
+    /// Any bus, tram or other stop nearby, as a last resort.
+    private func transportStops(near coordinate: CLLocationCoordinate2D) async -> [Station] {
+        let request = MKLocalPointsOfInterestRequest(center: coordinate, radius: Self.maxStationWalk)
+        request.pointOfInterestFilter = MKPointOfInterestFilter(including: [.publicTransport])
+        let items = (try? await MKLocalSearch(request: request).start().mapItems) ?? []
+        return items.map { Station(name: $0.name ?? "Stop", location: $0.location) }
+    }
+
+    /// The real walking path and time, or a straight line at walking pace.
+    private func walk(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D) async -> (path: [CLLocationCoordinate2D], time: TimeInterval) {
         let request = MKDirections.Request()
         request.source = MKMapItem(location: CLLocation(latitude: start.latitude, longitude: start.longitude), address: nil)
         request.destination = MKMapItem(location: CLLocation(latitude: end.latitude, longitude: end.longitude), address: nil)
         request.transportType = .walking
         if let route = try? await MKDirections(request: request).calculate().routes.first {
-            return route.polyline.coordinates
+            return (route.polyline.coordinates, route.expectedTravelTime)
         }
-        return [start, end]
+        let meters = CLLocation(latitude: start.latitude, longitude: start.longitude)
+            .distance(from: CLLocation(latitude: end.latitude, longitude: end.longitude))
+        return ([start, end], meters / 1.3)
     }
 
     // MARK: - Cycling fallback

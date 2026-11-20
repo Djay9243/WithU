@@ -32,8 +32,12 @@ struct MapScreen: View {
 
     private var mode: TravelMode { model.settings.lastTravelMode }
 
-    /// A little taller when there's a route note (e.g. which stations).
-    private var sheetHeight: CGFloat { route?.note == nil ? 300 : 340 }
+    /// Taller for public transport steps, a little taller for a route note.
+    private var sheetHeight: CGFloat {
+        guard let route else { return 300 }
+        if route.legs.contains(where: { $0.kind == .ride }) { return 400 }
+        return route.note == nil ? 300 : 340
+    }
 
     private struct PlanKey: Equatable {
         var destination: Destination?
@@ -314,7 +318,18 @@ private struct TripSheet: View {
                 modeRow
             }
 
-            if let note = route?.note, !isPlanning {
+            if let route, !isPlanning, let destination,
+               route.legs.contains(where: { $0.kind == .ride }) {
+                // Public transport: which station to walk to, where to get off.
+                HStack(alignment: .top, spacing: 8) {
+                    TransitSteps(legs: route.legs, destinationName: destination.name)
+                    Spacer(minLength: 4)
+                    // Exact lines and changes come from Apple Maps.
+                    Button("Lines in Maps") { openTransitInMaps(destination) }
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Theme.primary)
+                }
+            } else if let note = route?.note, !isPlanning {
                 HStack(spacing: 8) {
                     Image(systemName: mode == .transit ? "tram.fill" : "info.circle")
                         .foregroundStyle(mode.routeColor)
