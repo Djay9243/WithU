@@ -364,6 +364,35 @@ final class TripManager {
         startAlert(trigger: .manual)
     }
 
+    /// True while Face ID is open for "Get Help", so a second tap can't start another.
+    private(set) var isConfirmingHelp = false
+
+    /// "Get Help" / "I Need Help" after the person tapped Send Alert: confirms
+    /// it's really them (Face ID, passcode as fallback), then alerts the circle.
+    /// Returns false when nothing was sent. The lock-screen action and the
+    /// missed check-in alert don't use this; they never need Face ID.
+    func requestHelp() async -> Bool {
+        guard !isConfirmingHelp else { return false }
+        switch phase {
+        case .active, .checkingIn: break
+        default: return false
+        }
+        isConfirmingHelp = true
+        defer { isConfirmingHelp = false }
+        guard await auth.authenticateOwner(reason: "Confirm it's you to alert your circle") else { return false }
+        // The check-in may have run out while Face ID was open.
+        switch phase {
+        case .active, .checkingIn:
+            emergency()
+            return true
+        case .alerting:
+            // The alert already started on its own; nothing more to send.
+            return true
+        default:
+            return false
+        }
+    }
+
     /// True for a session started by SOS without a planned trip: no arrival
     /// detection or movement check-ins, just location sharing and the alert.
     private(set) var isSOSOnly = false

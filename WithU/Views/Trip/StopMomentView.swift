@@ -12,6 +12,7 @@ import SwiftUI
 struct StopMomentView: View {
     @Environment(AppModel.self) private var model
     @State private var composing = false
+    @State private var confirmingHelp = false
 
     private var trip: TripManager { model.trip }
 
@@ -59,12 +60,13 @@ struct StopMomentView: View {
                     }
                     .buttonStyle(.secondary(Theme.ink))
 
-                    Button("I Need Help") {
-                        trip.needHelp()
+                    Button {
+                        confirmingHelp = true
+                    } label: {
+                        Label("I Need Help", systemImage: "hand.raised")
                     }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.alertRed)
-                    .padding(.top, 4)
+                    .buttonStyle(.secondary(Theme.ink))
+                    .disabled(trip.isConfirmingHelp)
 
                     reminder
                 }
@@ -72,6 +74,7 @@ struct StopMomentView: View {
                 .padding(.bottom, 20)
             }
         }
+        .helpConfirmation(isPresented: $confirmingHelp)
         .sheet(isPresented: $composing) {
             StoryComposerView { _ in
                 // Sharing shows you're fine, so the check-in is answered.

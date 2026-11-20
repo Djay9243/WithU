@@ -72,7 +72,7 @@ struct IncomingSOSView: View {
                 .mapControlVisibility(.hidden)
                 .ignoresSafeArea(edges: .top)
             }
-            .overlay(alignment: .topTrailing) {
+            .overlay(alignment: .topLeading) {
                 Button(action: onClose) {
                     Image(systemName: "xmark")
                         .font(.body.weight(.semibold))
@@ -81,7 +81,7 @@ struct IncomingSOSView: View {
                         .background(Theme.surface, in: Circle())
                 }
                 .buttonStyle(.plain)
-                .padding(.trailing, 16)
+                .padding(.leading, 16)
                 .padding(.top, 12)
                 .accessibilityLabel("Close")
                 .accessibilityHint("You can open this again from Circles.")

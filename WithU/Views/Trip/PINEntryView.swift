@@ -46,13 +46,24 @@ struct PINEntryView: View {
                         .accessibilityLabel("Use \(model.auth.biometryName)")
                     }
                 }
-                Button("Back") {
-                    trip.cancelPINEntry()
-                }
-                .font(.footnote)
-                .foregroundStyle(Theme.inkSecondary)
-                .padding(.bottom, 20)
+                .padding(.bottom, 24)
             }
+        }
+        .overlay(alignment: .topLeading) {
+            // Back to the alert screen, top left like every other way out.
+            Button {
+                trip.cancelPINEntry()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Theme.ink)
+                    .frame(width: 44, height: 44)
+                    .background(Theme.surface, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .padding(.leading, 16)
+            .padding(.top, 12)
+            .accessibilityLabel("Back")
         }
     }
 
