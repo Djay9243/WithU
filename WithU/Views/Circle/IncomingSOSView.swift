@@ -103,7 +103,7 @@ struct IncomingSOSView: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 6) {
-                    StatusPill(text: "SOS", tint: Theme.alertRed)
+                    StatusPill(text: "Alert", tint: Theme.alertRed)
                     Text("\(trip.name) Needs Help")
                         .font(.title2.bold())
                         .foregroundStyle(Theme.ink)
@@ -160,7 +160,7 @@ struct IncomingSOSView: View {
                 }
             }
 
-            Text("If you can't reach \(trip.name) and think they're in danger, call emergency services.")
+            Text("Can't reach \(trip.name)? Call emergency services.")
                 .font(.caption)
                 .foregroundStyle(Theme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -221,7 +221,7 @@ extension FollowedTrip {
     }
 }
 
-#Preview("Incoming SOS") {
+#Preview("Incoming Alert") {
     IncomingSOSView(trip: FollowedTrip(fromUser: "a",
                                        name: "Sara",
                                        destination: "Napoli Piazza Garibaldi",

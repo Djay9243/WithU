@@ -39,6 +39,8 @@ final class TripManager {
     private(set) var contacts: [TrustedContact] = []
     private(set) var circleName = ""
     private var circle: TrustedCircle?
+    /// The circle the running trip is shared with.
+    var circleID: UUID? { circle?.id }
     private(set) var startedAt: Date = .now
     private(set) var endsAt: Date = .now
     private(set) var routeCoordinates: [CLLocationCoordinate2D] = []
@@ -53,6 +55,11 @@ final class TripManager {
     private(set) var arrivedAt: Date?
     private(set) var extensionsAdded: TimeInterval = 0
     private(set) var isBusyRoute = false
+    /// Identifies the running trip, so stories shared on the way belong to it.
+    private(set) var tripID = UUID()
+
+    /// Called when a trip ends with an arrival, to keep it in the journal.
+    var onArrived: ((Journey) -> Void)?
 
     var currentLocation: CLLocation? { location.currentLocation }
 
@@ -102,6 +109,7 @@ final class TripManager {
     func start(plan: TripPlan, route: RouteResult, circle: TrustedCircle, settings: AppSettings) {
         guard phase == .idle else { return }
         isSOSOnly = false
+        tripID = UUID()
         self.plan = plan
         self.contacts = circle.contacts
         self.circleName = circle.name
@@ -153,7 +161,8 @@ final class TripManager {
                               isBusyRoute: isBusyRoute,
                               extensionsAdded: extensionsAdded,
                               isAlerting: isAlertActive,
-                              alertStartedAt: alertStartedAt)
+                              alertStartedAt: alertStartedAt,
+                              tripID: tripID)
         Persistence.save(saved, for: .activeTrip)
     }
 
@@ -167,6 +176,7 @@ final class TripManager {
             return
         }
         plan = saved.plan
+        tripID = saved.tripID ?? UUID()
         circle = saved.circle
         contacts = saved.circle.contacts
         circleName = saved.circle.name
@@ -212,6 +222,15 @@ final class TripManager {
         liveActivity.end(status: .arrived)
         if let plan {
             notifications.postArrived(destination: plan.destination.name)
+            if !isSOSOnly {
+                onArrived?(Journey(id: tripID,
+                                   destinationName: plan.destination.name,
+                                   mode: plan.mode,
+                                   startedAt: startedAt,
+                                   endedAt: .now,
+                                   distance: plan.distance,
+                                   circleName: circleName))
+            }
         }
         let ids = contacts.map(\.id)
         Task { await sync.send(CircleMessage(kind: .arrived, contactIDs: ids)) }
@@ -325,7 +344,7 @@ final class TripManager {
     /// detection or movement check-ins, just location sharing and the alert.
     private(set) var isSOSOnly = false
 
-    /// SOS from Apple Watch (or anywhere) when no trip is running: shares your
+    /// An alert when no trip is running: shares your
     /// location with the circle and alerts them straight away.
     func startSOS(circle: TrustedCircle, settings: AppSettings) {
         if isActive {
@@ -333,7 +352,7 @@ final class TripManager {
             return
         }
         let here = location.currentLocation?.coordinate
-        let spot = Destination(name: "SOS",
+        let spot = Destination(name: "Alert",
                                subtitle: "",
                                latitude: here?.latitude ?? 0,
                                longitude: here?.longitude ?? 0)

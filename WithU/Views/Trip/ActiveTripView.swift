@@ -13,6 +13,7 @@ struct ActiveTripView: View {
     @Environment(AppModel.self) private var model
     @State private var camera: MapCameraPosition = .automatic
     @State private var confirmingEnd = false
+    @State private var composing = false
 
     private var trip: TripManager { model.trip }
     private var mode: TravelMode { trip.plan?.mode ?? .walk }
@@ -31,7 +32,14 @@ struct ActiveTripView: View {
         } message: {
             Text("Location sharing stops and \(trip.circleName) is told the trip was cancelled.")
         }
+        .sheet(isPresented: $composing) {
+            StoryComposerView()
+                .environment(model)
+                .preferredColorScheme(model.settings.appearance.colorScheme)
+        }
     }
+
+    private var momentCount: Int { model.stories.stories(forTrip: trip.tripID).count }
 
     // MARK: Map
 
@@ -58,6 +66,23 @@ struct ActiveTripView: View {
             .overlay(alignment: .top) {
                 VStack(spacing: 10) {
                     HStack {
+                        Button {
+                            composing = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "camera.fill")
+                                Text(momentCount == 0 ? "Share a Moment" : "\(momentCount) \(momentCount == 1 ? "Moment" : "Moments")")
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .frame(height: 44)
+                            .background(Theme.primary, in: Capsule())
+                            .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
+                        }
+                        .buttonStyle(PressableStyle())
+                        .accessibilityLabel("Share a Moment")
+
                         Spacer()
 
                         Button {
@@ -105,7 +130,7 @@ struct ActiveTripView: View {
                 Button {
                     trip.emergency()
                 } label: {
-                    Label("SOS", systemImage: "exclamationmark.triangle.fill")
+                    Label("Alert", systemImage: "exclamationmark.triangle.fill")
                 }
                 .buttonStyle(.secondary(Theme.alertRed))
             }

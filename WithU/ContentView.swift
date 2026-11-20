@@ -78,6 +78,10 @@ struct TripFlowView: View {
             case .active:
                 ActiveTripView()
                     .transition(.opacity)
+            case .checkingIn(.unusualStop):
+                // A long stop asks about sharing first; safety still runs underneath.
+                StopMomentView()
+                    .transition(.opacity)
             case .checkingIn(let reason):
                 SmartCheckInView(reason: reason)
                     .transition(.opacity)

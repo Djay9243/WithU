@@ -12,6 +12,7 @@ struct SettingsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var pinSetup: PINSetupView.Kind?
     @State private var choosingName = false
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         @Bindable var model = model
@@ -21,13 +22,17 @@ struct SettingsView: View {
                 appearanceSection(settings: $model.settings)
                 tripsSection(settings: $model.settings)
                 safetySection
-                watchSection(settings: $model.settings)
                 permissionsSection
             }
             .scrollContentBackground(.hidden)
             .background(ScreenBackground())
             .tint(Theme.primary)
             .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
         .sheet(item: $pinSetup) { kind in
             PINSetupView(kind: kind)
@@ -121,6 +126,30 @@ struct SettingsView: View {
                 Label("Low-Battery Location", systemImage: "battery.25percent")
             }
             .listRowBackground(Theme.surface)
+            Toggle(isOn: settings.checkOnStop) {
+                Label("Check In When I Stop", systemImage: "figure.stand")
+            }
+            .listRowBackground(Theme.surface)
+            if settings.wrappedValue.checkOnStop {
+                Picker(selection: settings.stopThresholdMinutes) {
+                    ForEach([5, 8, 12, 15, 20], id: \.self) { minutes in
+                        Text("\(minutes) min").tag(minutes)
+                    }
+                } label: {
+                    Label("After", systemImage: "hourglass")
+                }
+                .listRowBackground(Theme.surface)
+            }
+            Toggle(isOn: settings.homeDeadlineEnabled) {
+                Label("Home By", systemImage: "house")
+            }
+            .listRowBackground(Theme.surface)
+            if settings.wrappedValue.homeDeadlineEnabled {
+                DatePicker(selection: deadlineBinding(settings), displayedComponents: .hourAndMinute) {
+                    Label("Time", systemImage: "clock")
+                }
+                .listRowBackground(Theme.surface)
+            }
             Picker(selection: settings.checkInResponseSeconds) {
                 ForEach(TripRules.checkInWindowOptions, id: \.self) { seconds in
                     Text(Format.responseTime(seconds).replacingOccurrences(of: "minutes", with: "min").replacingOccurrences(of: "minute", with: "min"))
@@ -132,6 +161,19 @@ struct SettingsView: View {
             .listRowBackground(Theme.surface)
         }
         .tint(Theme.safeGreen)
+    }
+
+    private func deadlineBinding(_ settings: Binding<AppSettings>) -> Binding<Date> {
+        Binding(
+            get: {
+                let minutes = settings.wrappedValue.homeDeadlineMinutes
+                return Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: .now) ?? .now
+            },
+            set: { date in
+                let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+                settings.wrappedValue.homeDeadlineMinutes = (components.hour ?? 22) * 60 + (components.minute ?? 45)
+            }
+        )
     }
 
     private var safetySection: some View {
@@ -156,16 +198,6 @@ struct SettingsView: View {
             }
         }
         .listRowBackground(Theme.surface)
-    }
-
-    private func watchSection(settings: Binding<AppSettings>) -> some View {
-        Section("Apple Watch") {
-            Toggle(isOn: settings.heartRatePrompt) {
-                Label("Heart-Rate Check-Ins", systemImage: "heart.fill")
-            }
-            .tint(Theme.safeGreen)
-            .listRowBackground(Theme.surface)
-        }
     }
 
     private var permissionsSection: some View {

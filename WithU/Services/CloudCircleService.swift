@@ -278,7 +278,7 @@ final class CloudCircleService: CircleSyncing {
             kind = "alert"
             snapshot = snap
             title = "\(name) Needs Help"
-            body = "They didn't answer a check-in. Open WithU to see where they are."
+            body = "Tap to see where they are."
             startPollingForResponses(me: me)
         case .allClear:
             kind = "safe"

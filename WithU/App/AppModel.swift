@@ -11,7 +11,7 @@ import Observation
 import SwiftUI
 
 enum AppTab: Hashable {
-    case home, circle, settings
+    case map, journal, circle
 }
 
 @Observable
@@ -19,12 +19,12 @@ final class AppModel {
     static let shared = AppModel()
 
     /// The selected tab, so screens can jump to Circle or Settings.
-    var selectedTab: AppTab = .home
+    var selectedTab: AppTab = .map
 
     /// Opening the app from a notification or the Live Activity lands on the
     /// trip, which is always on screen while it runs.
     func showTrip() {
-        selectedTab = .home
+        selectedTab = .map
     }
 
     /// Handles `withu://trip` from the Live Activity and Lock Screen.
@@ -61,11 +61,11 @@ final class AppModel {
     let notifications = NotificationService()
     let auth = AuthenticationService()
     let routing = RoutingService()
+    /// Stories and finished journeys.
+    let stories = StoryStore()
     let trip: TripManager
     /// iCloud delivery to your circle; nil until `WithUCloudSyncEnabled` is on.
     let cloud: CloudCircleService?
-    /// Keeps the Apple Watch app in step with the trip.
-    private(set) var watch: WatchBridge?
 
     private init() {
         hasCompletedOnboarding = Persistence.bool(for: .onboardingComplete)
@@ -80,13 +80,12 @@ final class AppModel {
         }
         trip = TripManager(location: location, notifications: notifications, auth: auth)
         cloud = CloudCircleService.isEnabled ? CloudCircleService() : nil
+        trip.onArrived = { [unowned self] journey in
+            stories.record(journey)
+        }
         if settings.selectedCircleID == nil || !circles.contains(where: { $0.id == settings.selectedCircleID }) {
             settings.selectedCircleID = circles[0].id
         }
-        watch = WatchBridge(trip: trip,
-                            settings: { [unowned self] in settings },
-                            selectedCircle: { [unowned self] in selectedCircle },
-                            startSOS: { [unowned self] in startSOS() })
 
         // Tapping a notification opens the trip, or Circles for someone else's.
         notifications.onOpen = { [unowned self] fromCircle in
@@ -163,6 +162,13 @@ final class AppModel {
         return circle
     }
 
+    /// Creates a circle with its people in one go and makes it the selected one.
+    func createCircle(named name: String, with people: [ContactCandidate]) {
+        guard let circle = addCircle(named: name) else { return }
+        addContacts(people, to: circle.id)
+        settings.selectedCircleID = circle.id
+    }
+
     func renameCircle(_ circle: TrustedCircle, to name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, let index = circles.firstIndex(where: { $0.id == circle.id }) else { return }
@@ -173,6 +179,7 @@ final class AppModel {
     func deleteCircle(_ circle: TrustedCircle) {
         guard circles.count > 1 else { return }
         circles.removeAll { $0.id == circle.id }
+        stories.removeFromAudiences(circleID: circle.id, memberIDs: Set(circle.contacts.map(\.id)))
         if settings.selectedCircleID == circle.id {
             settings.selectedCircleID = circles[0].id
         }
@@ -239,7 +246,41 @@ final class AppModel {
 
     func removeContacts(at offsets: IndexSet, from circleID: UUID) {
         guard let index = circles.firstIndex(where: { $0.id == circleID }) else { return }
+        let removed = offsets.map { circles[index].contacts[$0].id }
         circles[index].contacts.remove(atOffsets: offsets)
+        // Someone who leaves a circle no longer sees its stories.
+        stories.removeFromAudiences(memberIDs: Set(removed))
+    }
+
+    /// Turns stories on or off for a circle, e.g. for a "safety only" circle.
+    func setReceivesStories(_ enabled: Bool, for circleID: UUID) {
+        guard let index = circles.firstIndex(where: { $0.id == circleID }) else { return }
+        circles[index].receivesStories = enabled
+        if !enabled {
+            stories.removeFromAudiences(circleID: circleID, memberIDs: Set(circles[index].contacts.map(\.id)))
+        }
+    }
+
+    /// Circles that can be picked as a story audience.
+    var storyCircles: [TrustedCircle] {
+        circles.filter { $0.receivesStories && !$0.contacts.isEmpty }
+    }
+
+    /// The audience a new story starts with: the circle the current trip is
+    /// shared with, if it accepts stories.
+    var defaultStoryAudience: StoryAudience {
+        let circle = trip.circleID.flatMap { self.circle(withID: $0) } ?? selectedCircle
+        guard circle.receivesStories, !circle.contacts.isEmpty else { return .onlyMe }
+        return StoryAudience(circleIDs: [circle.id])
+    }
+
+    /// A readable summary of who can see a story, e.g. "Family, Mum".
+    func audienceSummary(_ audience: StoryAudience) -> String {
+        if audience.isPrivate { return "Only Me" }
+        let circleNames = audience.circleIDs.compactMap { circle(withID: $0)?.name }
+        let people = allContacts().filter { audience.memberIDs.contains($0.id) }.map(\.name)
+        let names = circleNames + people
+        return names.isEmpty ? "Only Me" : names.formatted(.list(type: .and))
     }
 
     /// Reorders the alert chain.
@@ -269,7 +310,7 @@ final class AppModel {
         case notFound
         var errorDescription: String? {
             switch self {
-            case .noLocation: "We couldn't get your current location. Check Location permission and try again."
+            case .noLocation: "Can't find your location. Check Location in Settings."
             case .noContacts(let circle): "Add at least one trusted contact to “\(circle)” before starting a trip."
             case .notFound: "We couldn't find that place."
             }
@@ -299,11 +340,6 @@ final class AppModel {
         settings.lastTravelMode = plan.mode
         settings.selectedCircleID = circle.id
         trip.start(plan: plan, route: route, circle: circle, settings: settings)
-    }
-
-    /// SOS without a trip, e.g. from Apple Watch: alerts the selected circle.
-    func startSOS() {
-        trip.startSOS(circle: selectedCircle, settings: settings)
     }
 
     /// Used by Siri and Shortcuts: search, plan and start in one go.

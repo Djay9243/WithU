@@ -13,16 +13,16 @@ struct OnboardingFlowView: View {
 
     private let pages: [OnboardingPage] = [
         OnboardingPage(art: .logo,
-                       title: "Share Your Trip",
-                       body: "Pick a destination and your trusted people follow along live, only for the trip.",
+                       title: "Travel Solo, Together",
+                       body: "Explore Italy and share the moments with your circle.",
                        button: "Continue"),
         OnboardingPage(art: .symbol("bell.badge.fill"),
-                       title: "We Check In First",
-                       body: "If you stop unexpectedly or go off route, we ask “Are you OK?” before alerting anyone.",
+                       title: "We've Got Your Back",
+                       body: "Stop for a while and we'll check in. Your circle hears only if you need them.",
                        button: "Continue"),
         OnboardingPage(art: .symbol("person.2.fill"),
-                       title: "Choose Your Circle",
-                       body: "Add trusted contacts. We only alert them if you miss a check-in or trigger an SOS.",
+                       title: "Pick Your People",
+                       body: "Add friends and family to a circle.",
                        button: "Get Started")
     ]
 

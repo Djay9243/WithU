@@ -16,6 +16,8 @@ nonisolated enum Persistence {
         case circles = "withu.circles"
         case activeTrip = "withu.activeTrip"
         case recentDestinations = "withu.recentDestinations"
+        case stories = "withu.stories"
+        case journeys = "withu.journeys"
     }
 
     static func load<T: Decodable>(_ type: T.Type, for key: Key) -> T? {

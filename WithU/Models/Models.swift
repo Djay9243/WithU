@@ -143,6 +143,15 @@ nonisolated struct TrustedCircle: Codable, Identifiable, Hashable, Sendable {
     var id: UUID = UUID()
     var name: String
     var contacts: [TrustedContact] = []
+    /// Optional so circles saved by older builds still decode.
+    var storiesSetting: Bool?
+
+    /// Whether this circle can be picked as an audience for stories. Turn it
+    /// off for a "safety only" circle that gets alerts but never photos.
+    var receivesStories: Bool {
+        get { storiesSetting ?? true }
+        set { storiesSetting = newValue }
+    }
 
     static let defaultName = "My Circle"
 }
@@ -185,6 +194,8 @@ nonisolated struct SavedTrip: Codable, Sendable {
     var extensionsAdded: TimeInterval
     var isAlerting: Bool
     var alertStartedAt: Date?
+    /// Links stories to the trip. Optional for trips saved by older builds.
+    var tripID: UUID?
 }
 
 // MARK: - Check-ins and alerts
@@ -195,7 +206,6 @@ nonisolated enum CheckInReason: String, Codable, Sendable, Hashable {
     case unexpectedSpeed
     case timerExpired
     case deadlinePassed
-    case heartRateSpike
     case manual
 
     var title: String {
@@ -205,7 +215,6 @@ nonisolated enum CheckInReason: String, Codable, Sendable, Hashable {
         case .unexpectedSpeed: "You're moving faster than expected"
         case .timerExpired: "Your trip timer ran out"
         case .deadlinePassed: "You're not home yet"
-        case .heartRateSpike: "Your heart rate spiked"
         case .manual: "Quick check-in"
         }
     }
@@ -217,7 +226,6 @@ nonisolated enum CheckInReason: String, Codable, Sendable, Hashable {
         case .unexpectedSpeed: "Your speed doesn't match how you said you're travelling."
         case .timerExpired: "Running late? Add 10 minutes to keep going."
         case .deadlinePassed: "You asked us to check in if you weren't home by now."
-        case .heartRateSpike: "Your Apple Watch noticed a sudden spike."
         case .manual: "Let your circle know you're OK."
         }
     }
@@ -263,7 +271,6 @@ nonisolated struct AppSettings: Codable, Equatable, Sendable {
     var userName: String = ""
     var lowBatteryPing = true
     var preferBusyRoute = true
-    var heartRatePrompt = false
     var checkOnStop = true
     var stopThresholdMinutes = 12
     var homeDeadlineEnabled = false

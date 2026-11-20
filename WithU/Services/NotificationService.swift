@@ -79,9 +79,15 @@ final class NotificationService: NSObject {
     /// Posts the "Are you OK?" prompt so it reaches the person even in a Focus.
     func postCheckIn(reason: CheckInReason, window: TimeInterval) {
         let content = UNMutableNotificationContent()
-        content.title = "Are You OK?"
-        content.subtitle = reason.title
-        content.body = "Reply within \(Format.responseTime(Int(window))) or your circle will be alerted."
+        if reason == .unusualStop {
+            content.title = "Found something nice? 📸"
+            content.subtitle = reason.title
+            content.body = "Share a moment, or tap I'm OK within \(Format.responseTime(Int(window))) so your circle isn't alerted."
+        } else {
+            content.title = "Are You OK?"
+            content.subtitle = reason.title
+            content.body = "Reply within \(Format.responseTime(Int(window))) or your circle will be alerted."
+        }
         content.categoryIdentifier = Self.checkInCategory
         content.sound = criticalAlertsAllowed ? .defaultCritical : .default
         // Time Sensitive delivery needs the entitlement, which requires a paid
@@ -96,9 +102,9 @@ final class NotificationService: NSObject {
         let content = UNMutableNotificationContent()
         content.title = "Alerting Your Circle"
         if let contactName {
-            content.body = "\(contactName) is being notified first. Open WithU to cancel with Face ID or your PIN."
+            content.body = "\(contactName) is being told first. Open WithU to cancel."
         } else {
-            content.body = "Your contacts are being notified. Open WithU to cancel with Face ID or your PIN."
+            content.body = "Your circle is being told. Open WithU to cancel."
         }
         content.sound = .default
         content.interruptionLevel = .timeSensitive

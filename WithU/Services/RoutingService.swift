@@ -18,6 +18,27 @@ nonisolated struct RouteResult: Sendable {
     var isBusyRoute: Bool
 }
 
+/// WithU is available for trips in Italy only.
+nonisolated enum Italy {
+    /// Covers mainland Italy, Sicily and Sardinia.
+    static let region = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 41.8, longitude: 12.6),
+        span: MKCoordinateSpan(latitudeDelta: 12.2, longitudeDelta: 12.4)
+    )
+
+    static func contains(_ coordinate: CLLocationCoordinate2D) -> Bool {
+        (35.4...47.1).contains(coordinate.latitude) && (6.6...18.6).contains(coordinate.longitude)
+    }
+
+    /// Uses the address country when known, otherwise the coordinate.
+    static func contains(_ item: MKMapItem) -> Bool {
+        if let region = item.addressRepresentations?.region {
+            return region.identifier == "IT"
+        }
+        return contains(item.location.coordinate)
+    }
+}
+
 final class RoutingService {
     enum RoutingError: LocalizedError {
         case noRoute
@@ -31,11 +52,15 @@ final class RoutingService {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = trimmed
         request.resultTypes = [.pointOfInterest, .address]
-        if let center {
+        // Search near the person when they're in Italy, otherwise across Italy.
+        if let center, Italy.contains(center) {
             request.region = MKCoordinateRegion(center: center, latitudinalMeters: 20_000, longitudinalMeters: 20_000)
+        } else {
+            request.region = Italy.region
         }
+        request.regionPriority = .required
         let response = try await MKLocalSearch(request: request).start()
-        return response.mapItems.map { item in
+        return response.mapItems.filter(Italy.contains).map { item in
             let location = item.location
             let name = item.name ?? item.address?.shortAddress ?? "Dropped pin"
             let subtitle = item.address?.shortAddress

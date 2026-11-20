@@ -7,8 +7,11 @@ import SwiftUI
 
 struct ArrivedView: View {
     @Environment(AppModel.self) private var model
+    @State private var showingRecap = false
 
     private var trip: TripManager { model.trip }
+    private var journey: Journey? { model.stories.journeys.first { $0.id == trip.tripID } }
+    private var moments: [Story] { model.stories.stories(forTrip: trip.tripID) }
 
     var body: some View {
         ZStack {
@@ -48,14 +51,47 @@ struct ArrivedView: View {
                 .card(fill: Theme.lavender, padding: 12)
                 .padding(.horizontal, 36)
 
+                if !moments.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(moments) { story in
+                                StoryThumbnail(story: story, size: 72)
+                            }
+                        }
+                        .padding(.horizontal, 36)
+                    }
+                }
+
                 Spacer()
 
-                Button("Done") {
-                    trip.finish()
+                VStack(spacing: 12) {
+                    if journey != nil {
+                        Button {
+                            showingRecap = true
+                        } label: {
+                            Label(moments.isEmpty ? "View Trip Recap" : "View Recap · \(moments.count) \(moments.count == 1 ? "Moment" : "Moments")",
+                                  systemImage: "sparkles")
+                        }
+                        .buttonStyle(.primary)
+                        Button("Done") { trip.finish() }
+                            .buttonStyle(.secondary)
+                    } else {
+                        Button("Done") { trip.finish() }
+                            .buttonStyle(.primary)
+                    }
                 }
-                .buttonStyle(.primary)
                 .padding(.horizontal, 36)
                 .padding(.bottom, 24)
+            }
+        }
+        .sheet(isPresented: $showingRecap) {
+            if let journey {
+                NavigationStack {
+                    TripRecapView(journey: journey)
+                        .storyDestinations()
+                }
+                .environment(model)
+                .preferredColorScheme(model.settings.appearance.colorScheme)
             }
         }
     }

@@ -24,7 +24,7 @@ struct PINEntryView: View {
                     Text("Enter Your PIN")
                         .font(.title2.bold())
                         .foregroundStyle(Theme.ink)
-                    Text("Enter your Safety PIN to cancel the alert.")
+                    Text("To cancel the alert.")
                         .font(.subheadline)
                         .foregroundStyle(Theme.inkSecondary)
                 }

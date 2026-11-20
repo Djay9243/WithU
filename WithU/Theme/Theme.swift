@@ -161,8 +161,8 @@ private struct PrimaryButtonBody: View {
             .foregroundStyle(foreground)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(fill, in: Capsule())
-            .shadow(color: fill.opacity(0.35), radius: 10, y: 6)
+            .contentShape(Capsule())
+            .glassEffect(.regular.tint(fill).interactive(), in: .capsule)
             .opacity(configuration.isPressed ? 0.85 : 1)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
@@ -178,11 +178,8 @@ struct SecondaryButtonStyle: ButtonStyle {
             .foregroundStyle(tint)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(Theme.cardWhite, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(tint.opacity(0.35), lineWidth: 1)
-            )
+            .contentShape(Capsule())
+            .glassEffect(.regular.interactive(), in: .capsule)
             .opacity(configuration.isPressed ? 0.8 : 1)
     }
 }
@@ -204,9 +201,10 @@ struct CardModifier: ViewModifier {
     var padding: CGFloat = 16
 
     func body(content: Content) -> some View {
+        // Liquid Glass, lightly tinted with the card colour.
         content
             .padding(padding)
-            .background(fill, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .glassEffect(.regular.tint(fill.opacity(0.35)), in: .rect(cornerRadius: 22))
     }
 }
 
@@ -269,7 +267,7 @@ struct StatusPill: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(tint.opacity(0.14), in: Capsule())
+        .glassEffect(.regular.tint(tint.opacity(0.2)), in: .capsule)
     }
 }
 
@@ -280,7 +278,7 @@ struct SymbolBadge: View {
 
     var body: some View {
         ZStack {
-            Circle().fill(Theme.lavenderDeep)
+            Circle().fill(.clear).glassEffect(.regular.tint(Theme.lavenderDeep.opacity(0.6)), in: .circle)
             Image(systemName: systemImage)
                 .font(.system(size: size * 0.38, weight: .semibold))
                 .foregroundStyle(Theme.primary)

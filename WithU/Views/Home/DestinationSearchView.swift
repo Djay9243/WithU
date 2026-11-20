@@ -46,8 +46,8 @@ struct DestinationSearchView: View {
                         }
                     }
                     .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .padding(.vertical, 14)
+                    .glassEffect(.regular, in: .capsule)
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
 

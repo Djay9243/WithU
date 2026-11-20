@@ -22,7 +22,7 @@ struct AlertingCircleView: View {
                     Text("Alerting Your Circle")
                         .font(.title2.bold())
                         .foregroundStyle(Theme.ink)
-                    Text("\(trip.circleName) is being alerted in order.")
+                    Text("Telling \(trip.circleName), one by one.")
                         .font(.subheadline)
                         .foregroundStyle(Theme.inkSecondary)
                 }
@@ -34,7 +34,7 @@ struct AlertingCircleView: View {
                         }
                         snapshotCard
                         if let responder = trip.respondingContact {
-                            Label("\(responder.name) is on it. No one else will be alerted.", systemImage: "checkmark.circle.fill")
+                            Label("\(responder.name) is on it.", systemImage: "checkmark.circle.fill")
                                 .font(.footnote.weight(.semibold))
                                 .foregroundStyle(Theme.deepGreen)
                                 .frame(maxWidth: .infinity, alignment: .leading)

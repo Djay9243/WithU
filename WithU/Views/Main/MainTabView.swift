@@ -11,14 +11,14 @@ struct MainTabView: View {
     var body: some View {
         @Bindable var model = model
         TabView(selection: $model.selectedTab) {
-            Tab("Map", systemImage: "location.fill", value: AppTab.home) {
-                HomeView()
+            Tab("Map", systemImage: "map.fill", value: AppTab.map) {
+                MapScreen()
+            }
+            Tab("Journal", systemImage: "book.fill", value: AppTab.journal) {
+                JournalView()
             }
             Tab("Circle", systemImage: "person.2.fill", value: AppTab.circle) {
                 CircleView()
-            }
-            Tab("Settings", systemImage: "gearshape.fill", value: AppTab.settings) {
-                SettingsView()
             }
         }
         .tint(Theme.primary)

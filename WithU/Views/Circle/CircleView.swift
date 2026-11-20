@@ -12,6 +12,7 @@ import SwiftUI
 struct CircleView: View {
     @Environment(AppModel.self) private var model
     @State private var editor: CircleNameEditor?
+    @State private var creating = false
 
     var body: some View {
         NavigationStack {
@@ -42,7 +43,7 @@ struct CircleView: View {
                         }
                     }
                 } footer: {
-                    Text("Swipe left on a circle to rename or delete it.")
+                    Text("Swipe to rename or delete.")
                 }
             }
             .scrollContentBackground(.hidden)
@@ -52,7 +53,7 @@ struct CircleView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        editor = .create
+                        creating = true
                     } label: {
                         Label("New Circle", systemImage: "plus")
                     }
@@ -63,6 +64,10 @@ struct CircleView: View {
             }
         }
         .circleNameEditor($editor)
+        .sheet(isPresented: $creating) {
+            NewCircleSheet()
+                .environment(model)
+        }
     }
 }
 
@@ -106,7 +111,7 @@ struct CircleDetailView: View {
             if let circle {
                 Section {
                     if circle.contacts.isEmpty {
-                        Text("Add people who have WithU installed. They're only alerted if you miss a check-in or send an SOS.")
+                        Text("Add people with WithU. They're alerted only if you need help.")
                             .font(.subheadline)
                             .foregroundStyle(Theme.inkSecondary)
                             .listRowBackground(Theme.surface)
@@ -161,6 +166,19 @@ struct CircleDetailView: View {
                         Label("Add From Contacts", systemImage: "person.crop.circle.badge.plus")
                     }
                     .listRowBackground(Theme.surface)
+                }
+
+                Section {
+                    Toggle(isOn: Binding(
+                        get: { circle.receivesStories },
+                        set: { model.setReceivesStories($0, for: circleID) }
+                    )) {
+                        Label("Can See My Stories", systemImage: "camera.fill")
+                    }
+                    .tint(Theme.safeGreen)
+                    .listRowBackground(Theme.surface)
+                } footer: {
+                    Text("Off: they get alerts, not photos.")
                 }
             }
         }
@@ -291,7 +309,7 @@ private struct FollowedTripRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityHint(trip.state == .needsHelp ? "Opens the SOS." : "Shows them in Maps.")
+            .accessibilityHint(trip.state == .needsHelp ? "Opens the alert." : "Shows them in Maps.")
 
             if trip.state == .needsHelp {
                 Button {
@@ -357,10 +375,10 @@ struct CirclePickerRow: View {
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 9)
-                        .background(selected ? Theme.primary : Theme.surface, in: Capsule())
                         .foregroundStyle(selected ? .white : Theme.ink)
                     }
                     .buttonStyle(.plain)
+                    .glassEffect(selected ? .regular.tint(Theme.primary).interactive() : .regular.interactive(), in: .capsule)
                     .accessibilityLabel("\(circle.name), \(circle.contacts.count) people")
                     .accessibilityAddTraits(selected ? .isSelected : [])
                 }
@@ -373,12 +391,10 @@ struct CirclePickerRow: View {
 // MARK: - Name editor
 
 enum CircleNameEditor: Identifiable {
-    case create
     case rename(TrustedCircle)
 
     var id: String {
         switch self {
-        case .create: "create"
         case .rename(let circle): circle.id.uuidString
         }
     }
@@ -396,13 +412,8 @@ private struct CircleNameEditorModifier: ViewModifier {
                     .textInputAutocapitalization(.words)
                 Button("Cancel", role: .cancel) { editor = nil }
                 Button(buttonTitle) {
-                    switch editor {
-                    case .create:
-                        model.addCircle(named: name)
-                    case .rename(let circle):
+                    if case .rename(let circle) = editor {
                         model.renameCircle(circle, to: name)
-                    case nil:
-                        break
                     }
                     editor = nil
                 }
@@ -423,19 +434,9 @@ private struct CircleNameEditorModifier: ViewModifier {
         Binding(get: { editor != nil }, set: { if !$0 { editor = nil } })
     }
 
-    private var title: String {
-        if case .rename = editor { return "Rename Circle" }
-        return "New Circle"
-    }
-
-    private var buttonTitle: String {
-        if case .rename = editor { return "Save" }
-        return "Create"
-    }
-
-    private var message: String {
-        "For example Family, Flatmates or Work."
-    }
+    private let title = "Rename Circle"
+    private let buttonTitle = "Save"
+    private let message = "For example Family or Friends."
 }
 
 extension View {

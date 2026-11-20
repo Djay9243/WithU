@@ -25,7 +25,7 @@ struct PermissionsView: View {
                         await model.location.requestAuthorization()
                     }
                     PermissionRow(title: "Notifications",
-                                  subtitle: "For check-ins and alerts, even in Focus",
+                                  subtitle: "For check-ins and alerts",
                                   systemImage: "bell.fill",
                                   isOn: model.notifications.isAuthorized,
                                   isDenied: model.notifications.authorizationStatus == .denied) {
@@ -33,10 +33,10 @@ struct PermissionsView: View {
                     }
                 } header: {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Your Safety Comes First")
+                        Text("A Few Permissions")
                             .font(.title2.bold())
                             .foregroundStyle(Theme.ink)
-                        Text("Your location is only shared during trips.")
+                        Text("Location is shared only during trips.")
                             .font(.subheadline)
                             .foregroundStyle(Theme.inkSecondary)
                     }
