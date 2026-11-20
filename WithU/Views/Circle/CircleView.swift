@@ -3,7 +3,7 @@
 //  WithU
 //
 //  Your circles. Swipe a circle to rename or delete it; tap it to manage
-//  who's in it and the order they're alerted in.
+//  who's in it. Everyone in a circle is told at the same time.
 //
 
 import MapKit
@@ -111,7 +111,7 @@ struct CircleDetailView: View {
             if let circle {
                 Section {
                     if circle.contacts.isEmpty {
-                        Text("Add people with WithU. They're alerted only if you need help.")
+                        Text("Add people with WithU. They only hear from us if you need them.")
                             .font(.subheadline)
                             .foregroundStyle(Theme.inkSecondary)
                             .listRowBackground(Theme.surface)
@@ -152,10 +152,10 @@ struct CircleDetailView: View {
                         model.removeContacts(at: offsets, from: circleID)
                     }
                 } header: {
-                    Text("Alert Order")
+                    Text("People")
                 } footer: {
                     if !circle.contacts.isEmpty {
-                        Text("Swipe right to move up. Swipe left to remove.")
+                        Text("If you miss a check-in, everyone here hears at the same time. Swipe left to remove.")
                     }
                 }
 

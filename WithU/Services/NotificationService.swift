@@ -26,6 +26,7 @@ final class NotificationService: NSObject {
     static let helpAction = "WITHU_HELP"
     static let addTimeAction = "WITHU_ADD_TIME"
     static let checkInIdentifier = "withu.checkin"
+    static let checkInReminderIdentifier = "withu.checkin.reminder"
     static let alertIdentifier = "withu.alert"
 
     private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
@@ -55,7 +56,7 @@ final class NotificationService: NSObject {
     }
 
     private func registerCategories() {
-        let ok = UNNotificationAction(identifier: Self.okAction, title: "I'm OK", options: [.authenticationRequired])
+        let ok = UNNotificationAction(identifier: Self.okAction, title: "I'm Fine", options: [.authenticationRequired])
         let addTime = UNNotificationAction(identifier: Self.addTimeAction, title: "Add 10 Min", options: [.authenticationRequired])
         let help = UNNotificationAction(identifier: Self.helpAction, title: "I Need Help", options: [.destructive, .foreground])
         let category = UNNotificationCategory(identifier: Self.checkInCategory, actions: [ok, addTime, help], intentIdentifiers: [])
@@ -76,36 +77,46 @@ final class NotificationService: NSObject {
         timeSensitiveAllowed = settings.timeSensitiveSetting == .enabled
     }
 
-    /// Posts the "Are you OK?" prompt so it reaches the person even in a Focus.
+    /// Posts the check-in so it reaches the person even in a Focus, plus one
+    /// gentle reminder shortly before the circle would be told.
     func postCheckIn(reason: CheckInReason, window: TimeInterval) {
         let content = UNMutableNotificationContent()
         if reason == .unusualStop {
             content.title = "Found something nice? 📸"
             content.subtitle = reason.title
-            content.body = "Share a moment, or tap I'm OK within \(Format.responseTime(Int(window))) so your circle isn't alerted."
+            content.body = "Share a moment, or just tap I'm Fine."
         } else {
-            content.title = "Are You OK?"
+            content.title = "Everything okay?"
             content.subtitle = reason.title
-            content.body = "Reply within \(Format.responseTime(Int(window))) or your circle will be alerted."
+            content.body = "Tap I'm Fine when you have a moment. You have \(Format.responseTime(Int(window)))."
         }
         content.categoryIdentifier = Self.checkInCategory
-        content.sound = criticalAlertsAllowed ? .defaultCritical : .default
+        content.sound = .default
         // Time Sensitive delivery needs the entitlement, which requires a paid
         // developer team. Without it the system quietly delivers this as a normal alert.
-        content.interruptionLevel = criticalAlertsAllowed ? .critical : .timeSensitive
+        content.interruptionLevel = .timeSensitive
         content.relevanceScore = 1
-        let request = UNNotificationRequest(identifier: Self.checkInIdentifier, content: content, trigger: nil)
-        center.add(request)
+        center.add(UNNotificationRequest(identifier: Self.checkInIdentifier, content: content, trigger: nil))
+
+        // A second, gentle nudge before the circle is told.
+        let lead = TripRules.checkInReminderLead
+        guard window > lead else { return }
+        let reminder = UNMutableNotificationContent()
+        reminder.title = "Still with us?"
+        reminder.body = "Tap I'm Fine, or we'll let your circle know in \(Format.responseTime(Int(lead))) so they can check on you."
+        reminder.categoryIdentifier = Self.checkInCategory
+        reminder.sound = criticalAlertsAllowed ? .defaultCritical : .default
+        reminder.interruptionLevel = criticalAlertsAllowed ? .critical : .timeSensitive
+        reminder.relevanceScore = 1
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: window - lead, repeats: false)
+        center.add(UNNotificationRequest(identifier: Self.checkInReminderIdentifier, content: reminder, trigger: trigger))
     }
 
-    func postAlertStarted(contactName: String?) {
+    func postAlertStarted(circleName: String) {
         let content = UNMutableNotificationContent()
-        content.title = "Alerting Your Circle"
-        if let contactName {
-            content.body = "\(contactName) is being told first. Open WithU to cancel."
-        } else {
-            content.body = "Your circle is being told. Open WithU to cancel."
-        }
+        content.title = "Your circle is checking on you"
+        let name = circleName.isEmpty ? "Your circle" : circleName
+        content.body = "\(name) can see where you last were and your battery. Open WithU when you're okay."
         content.sound = .default
         content.interruptionLevel = .timeSensitive
         let request = UNNotificationRequest(identifier: Self.alertIdentifier, content: content, trigger: nil)
@@ -114,16 +125,17 @@ final class NotificationService: NSObject {
 
     func postArrived(destination: String) {
         let content = UNMutableNotificationContent()
-        content.title = "You've Arrived"
-        content.body = "Your circle was told you reached \(destination) safely. Sharing has stopped."
+        content.title = "You made it 🎉"
+        content.body = "Your circle knows you reached \(destination). Location sharing is off."
         content.sound = .default
         content.interruptionLevel = .active
         center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
     }
 
     func clearCheckIn() {
-        center.removePendingNotificationRequests(withIdentifiers: [Self.checkInIdentifier])
-        center.removeDeliveredNotifications(withIdentifiers: [Self.checkInIdentifier])
+        let ids = [Self.checkInIdentifier, Self.checkInReminderIdentifier]
+        center.removePendingNotificationRequests(withIdentifiers: ids)
+        center.removeDeliveredNotifications(withIdentifiers: ids)
     }
 
     func clearAll() {

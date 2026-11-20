@@ -75,8 +75,6 @@ nonisolated enum TravelMode: String, Codable, CaseIterable, Identifiable, Sendab
         }
     }
 
-    /// Apple Maps only returns an arrival estimate for transit, not a drawable route.
-    var providesRoutePolyline: Bool { self != .transit }
 
     var liveUpdateConfiguration: CLLocationUpdate.LiveConfiguration {
         switch self {
@@ -196,6 +194,8 @@ nonisolated struct SavedTrip: Codable, Sendable {
     var alertStartedAt: Date?
     /// Links stories to the trip. Optional for trips saved by older builds.
     var tripID: UUID?
+    /// What's drawn on the map. Optional for trips saved by older builds.
+    var legs: [RouteLeg]?
 }
 
 // MARK: - Check-ins and alerts
@@ -210,23 +210,23 @@ nonisolated enum CheckInReason: String, Codable, Sendable, Hashable {
 
     var title: String {
         switch self {
-        case .unusualStop: "You stopped for a while"
-        case .offRoute: "You've left your route"
-        case .unexpectedSpeed: "You're moving faster than expected"
-        case .timerExpired: "Your trip timer ran out"
-        case .deadlinePassed: "You're not home yet"
-        case .manual: "Quick check-in"
+        case .unusualStop: "You've stopped for a bit"
+        case .offRoute: "Taking a different way?"
+        case .unexpectedSpeed: "Picked up some speed?"
+        case .timerExpired: "Taking a little longer?"
+        case .deadlinePassed: "Not home yet?"
+        case .manual: "Just checking in"
         }
     }
 
     var message: String {
         switch self {
-        case .unusualStop: "You haven't moved for a while. Just checking in."
-        case .offRoute: "You seem to be away from the planned route."
-        case .unexpectedSpeed: "Your speed doesn't match how you said you're travelling."
-        case .timerExpired: "Running late? Add 10 minutes to keep going."
-        case .deadlinePassed: "You asked us to check in if you weren't home by now."
-        case .manual: "Let your circle know you're OK."
+        case .unusualStop: "No rush. Just let us know you're doing fine."
+        case .offRoute: "Looks like you went a different way. That's okay, just let us know you're fine."
+        case .unexpectedSpeed: "You're moving faster than usual. Hopped on a bus or taxi? Let us know you're fine."
+        case .timerExpired: "No worries. Add a few minutes, or let us know you're fine."
+        case .deadlinePassed: "You asked us to check in around now. Let us know you're fine."
+        case .manual: "Let your circle know you're fine."
         }
     }
 }
@@ -243,10 +243,10 @@ nonisolated enum ContactAlertStatus: String, Codable, Sendable, Hashable {
         switch self {
         case .notYetNotified: "Waiting"
         case .notified: "Sending…"
-        case .delivered: "Delivered"
-        case .noResponse: "No Response"
+        case .delivered: "Told"
+        case .noResponse: "No Reply Yet"
         case .onIt: "On It"
-        case .unreachable: "Not on WithU"
+        case .unreachable: "Not on WithU Yet"
         }
     }
 }
@@ -257,12 +257,17 @@ nonisolated struct ContactAlertState: Identifiable, Hashable, Sendable {
     var id: UUID { contact.id }
 }
 
-/// What gets shared with contacts the moment an alert starts.
+/// What gets shared with contacts when an alert starts: the last place the
+/// phone was detected, when that was, and the battery.
 nonisolated struct LocationSnapshot: Hashable, Sendable {
     var latitude: Double
     var longitude: Double
-    var batteryLevel: Double
+    /// 0...1, or nil when the phone can't tell (e.g. the Simulator).
+    var batteryLevel: Double?
+    /// When the location was detected, not when the alert was sent.
     var timestamp: Date
+    /// False when no location was detected at all during the trip.
+    var hasLocation: Bool = true
 }
 
 // MARK: - Settings
@@ -285,9 +290,14 @@ nonisolated struct AppSettings: Codable, Equatable, Sendable {
     /// From your own contact card; used so people can invite you.
     var userPhone: String?
 
-    /// How long you have to answer "Are You OK?" before your circle is alerted.
+    /// How long you have to answer a check-in before your circle is alerted.
+    /// Older builds stored 1–5 minutes; those fall back to the new default.
     var checkInResponseSeconds: Int {
-        get { checkInResponseChoice ?? TripRules.defaultCheckInWindow }
+        get {
+            guard let choice = checkInResponseChoice,
+                  TripRules.checkInWindowOptions.contains(choice) else { return TripRules.defaultCheckInWindow }
+            return choice
+        }
         set { checkInResponseChoice = newValue }
     }
 
@@ -311,12 +321,12 @@ nonisolated struct AppSettings: Codable, Equatable, Sendable {
 
 /// Tunable constants for the safety logic, kept in one place.
 nonisolated enum TripRules {
-    /// Default seconds to answer "Are You OK?" before the circle is alerted.
-    static let defaultCheckInWindow = 120
-    /// Choices offered in Settings.
-    static let checkInWindowOptions = [60, 120, 180, 300]
-    /// Seconds contact #1 gets to tap "On It" before everyone is alerted.
-    static let escalationDelay: TimeInterval = 120
+    /// Default seconds to answer a check-in before the whole circle is alerted.
+    static let defaultCheckInWindow = 15 * 60
+    /// Choices offered in Settings: 15 or 20 minutes.
+    static let checkInWindowOptions = [15 * 60, 20 * 60]
+    /// A gentle reminder notification this long before the circle is alerted.
+    static let checkInReminderLead: TimeInterval = 5 * 60
     /// Default extension when running late.
     static let extensionStep: TimeInterval = 10 * 60
     /// A location fix older than this means we are waiting for signal.

@@ -86,7 +86,7 @@ struct StopMomentView: View {
     private var reminder: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let remaining = max(trip.checkInDeadline?.timeIntervalSince(context.date) ?? 0, 0)
-            Label("We'll check on you in \(Format.countdown(remaining))",
+            Label("No reply in \(Format.countdown(remaining)) and we'll let your circle know",
                   systemImage: "shield.lefthalf.filled")
                 .font(.caption)
                 .foregroundStyle(Theme.inkSecondary)

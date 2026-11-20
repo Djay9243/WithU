@@ -103,8 +103,8 @@ struct IncomingSOSView: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 6) {
-                    StatusPill(text: "Alert", tint: Theme.alertRed)
-                    Text("\(trip.name) Needs Help")
+                    StatusPill(text: "Check on \(trip.name)", tint: Theme.amber)
+                    Text("\(trip.name) hasn't checked in")
                         .font(.title2.bold())
                         .foregroundStyle(Theme.ink)
                     Text("Sent \(trip.stateSince.formatted(.relative(presentation: .named)))")
@@ -121,8 +121,8 @@ struct IncomingSOSView: View {
                              systemImage: batterySymbol(battery),
                              tint: battery <= 0.2 ? Theme.alertRed : Theme.safeGreen)
                 }
-                infoTile(title: "Updated",
-                         value: trip.updatedAt.formatted(date: .omitted, time: .shortened),
+                infoTile(title: "Last Seen",
+                         value: (trip.lastSeen ?? trip.updatedAt).formatted(date: .omitted, time: .shortened),
                          systemImage: "clock.fill",
                          tint: Theme.primary)
             }
@@ -160,7 +160,7 @@ struct IncomingSOSView: View {
                 }
             }
 
-            Text("Can't reach \(trip.name)? Call emergency services.")
+            Text("Try calling \(trip.name) first. If you can't reach them and you're worried, call 112.")
                 .font(.caption)
                 .foregroundStyle(Theme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)

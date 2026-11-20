@@ -2,7 +2,8 @@
 //  SmartCheckInView.swift
 //  WithU
 //
-//  "Are you OK?" with a short countdown. No answer alerts the circle.
+//  A friendly "Everything okay?". No reply within the window (15 or 20 min)
+//  lets the whole circle know, with your last location and battery.
 //
 
 import SwiftUI
@@ -15,14 +16,14 @@ struct SmartCheckInView: View {
 
     var body: some View {
         ZStack {
-            ScreenBackground(tone: .alert)
+            ScreenBackground()
             VStack(spacing: 20) {
-                StatusPill(text: "Check-In", tint: Theme.alertRed)
+                StatusPill(text: "Quick Check-In", tint: Theme.primary)
                     .padding(.top, 12)
                 Spacer()
                 countdownRing
                 VStack(spacing: 8) {
-                    Text("Are You OK?")
+                    Text("Everything Okay?")
                         .font(.title.bold())
                         .foregroundStyle(Theme.ink)
                     Text(reason.title)
@@ -36,7 +37,7 @@ struct SmartCheckInView: View {
                 }
                 Spacer()
                 VStack(spacing: 12) {
-                    Button("I'm OK") {
+                    Button("I'm Fine") {
                         trip.respondOK()
                     }
                     .buttonStyle(.primary(Theme.deepGreen))
@@ -49,7 +50,7 @@ struct SmartCheckInView: View {
                     Button("I Need Help") {
                         trip.needHelp()
                     }
-                    .buttonStyle(.primary(Theme.alertRed))
+                    .buttonStyle(.secondary(Theme.alertRed))
                 }
                 .padding(.horizontal, 36)
                 .padding(.bottom, 24)
@@ -63,10 +64,10 @@ struct SmartCheckInView: View {
             let fraction = remaining / max(trip.checkInWindow, 1)
             ZStack {
                 Circle()
-                    .stroke(Theme.alertRed.opacity(0.15), lineWidth: 10)
+                    .stroke(Theme.primary.opacity(0.15), lineWidth: 10)
                 Circle()
                     .trim(from: 0, to: fraction)
-                    .stroke(Theme.alertRed, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                    .stroke(Theme.primary, style: StrokeStyle(lineWidth: 10, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .animation(.linear(duration: 0.1), value: fraction)
                 VStack(spacing: 2) {
@@ -74,14 +75,15 @@ struct SmartCheckInView: View {
                         .font(.system(size: 40, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(Theme.ink)
-                    Text("to reply")
+                    Text("before we tell\nyour circle")
+                        .multilineTextAlignment(.center)
                         .font(.caption2)
                         .foregroundStyle(Theme.inkSecondary)
                 }
             }
-            .frame(width: 150, height: 150)
+            .frame(width: 160, height: 160)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(Format.countdown(remaining)) left to reply")
+            .accessibilityLabel("\(Format.countdown(remaining)) before your circle is told")
         }
     }
 }

@@ -60,6 +60,8 @@ nonisolated struct FollowedTrip: Identifiable, Hashable, Sendable {
     var stateSince: Date
     /// So you can call them from the SOS screen.
     var phone: String?
+    /// When their phone last detected its location.
+    var lastSeen: Date? = nil
 
     var isActive: Bool { state == .onTheWay || state == .needsHelp || state == .safe }
     /// Identifies one SOS, so closing its screen doesn't reopen it.
@@ -272,18 +274,18 @@ final class CloudCircleService: CircleSyncing {
             snapshot = snap
         case .checkInMissed:
             kind = "missed"
-            title = "\(name) Missed a Check-In"
-            body = "We're checking on them now."
+            title = "\(name) hasn't checked in"
+            body = "They may just be busy. We're checking on them."
         case .alert(let snap):
             kind = "alert"
             snapshot = snap
-            title = "\(name) Needs Help"
-            body = "Tap to see where they are."
+            title = "Please check on \(name)"
+            body = Self.alertBody(snap)
             startPollingForResponses(me: me)
         case .allClear:
             kind = "safe"
-            title = "\(name) Is Safe"
-            body = "They cancelled the alert."
+            title = "\(name) is okay"
+            body = "They confirmed they're fine. Thanks for looking out."
             stopPollingForResponses()
         case .arrived:
             kind = "arrived"
@@ -311,9 +313,12 @@ final class CloudCircleService: CircleSyncing {
         }
         if let endsAt { record["endsAt"] = endsAt }
         if let snapshot {
-            record["latitude"] = snapshot.latitude
-            record["longitude"] = snapshot.longitude
-            record["battery"] = snapshot.batteryLevel
+            if snapshot.hasLocation {
+                record["latitude"] = snapshot.latitude
+                record["longitude"] = snapshot.longitude
+                record["locationTime"] = snapshot.timestamp
+            }
+            if let battery = snapshot.batteryLevel { record["battery"] = battery }
         }
         do {
             _ = try await database.save(record)
@@ -322,6 +327,19 @@ final class CloudCircleService: CircleSyncing {
             problem = error.localizedDescription
             return []
         }
+    }
+
+    /// "Last seen 22:14 · battery 41%. Tap to see where." for the alert push.
+    private static func alertBody(_ snapshot: LocationSnapshot?) -> String {
+        var parts: [String] = []
+        if let snapshot, snapshot.hasLocation {
+            parts.append("Last seen \(Format.clock(snapshot.timestamp))")
+        }
+        if let battery = snapshot?.batteryLevel {
+            parts.append("battery \(Int((battery * 100).rounded()))%")
+        }
+        let details = parts.joined(separator: " · ")
+        return details.isEmpty ? "They haven't checked in. Tap to see more." : "\(details). Tap to see where."
     }
 
     // MARK: - Private
@@ -381,7 +399,8 @@ final class CloudCircleService: CircleSyncing {
                                        battery: record["battery"] as? Double,
                                        updatedAt: record["createdAt"] as? Date ?? .now,
                                        stateSince: record["createdAt"] as? Date ?? .now,
-                                       phone: record["fromPhone"] as? String)
+                                       phone: record["fromPhone"] as? String,
+                                       lastSeen: record["locationTime"] as? Date)
         }
         // Quiet updates refresh the location and the timer.
         for record in updates {
@@ -391,6 +410,7 @@ final class CloudCircleService: CircleSyncing {
                 trip.latitude = lat
                 trip.longitude = lon
                 trip.battery = record["battery"] as? Double ?? trip.battery
+                trip.lastSeen = record["locationTime"] as? Date ?? date
             }
             if let end = record["endsAt"] as? Date { trip.endsAt = end }
             trip.updatedAt = date
